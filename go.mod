@@ -1,4 +1,4 @@
-module github.com/eoscanada/logging
+module github.com/dfuse-io/logging
 
 go 1.13
 

@@ -10,7 +10,7 @@ In all library packages (by convention, use the import path):
 var zlog *zap.Logger
 
 func init() {
-	logging.Register("github.com/eoscanada/kvdb/eosdb/bigt", &zlog)
+	logging.Register("github.com/path/to/my/package", &zlog)
 }
 ```
 
