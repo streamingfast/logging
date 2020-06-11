@@ -15,6 +15,7 @@
 package logging
 
 import (
+	"fmt"
 	"regexp"
 
 	"go.uber.org/zap"
@@ -27,7 +28,7 @@ var defaultLogger = zap.NewNop()
 
 func Register(name string, zlogPtr **zap.Logger) {
 	if _, found := registry[name]; found {
-		panic("name already registered")
+		panic(fmt.Sprintf("name already registered: %s", name))
 	}
 
 	registry[name] = zlogPtr
