@@ -16,7 +16,9 @@ package logging
 
 import (
 	"fmt"
+	"os"
 	"regexp"
+	"strings"
 
 	"go.uber.org/zap"
 )
@@ -79,4 +81,45 @@ func Extend(extender LoggerExtender, regexps ...string) {
 func Override(logger *zap.Logger) {
 	defaultLogger = logger
 	Set(logger)
+}
+
+// TestingOverride calls `Override` (or `Set`, see below) with a development
+// logger setup correctly with the right level based on some environment variables.
+//
+// By default, override using a `zap.NewDevelopment` logger (`info`), if
+// environment variable `DEBUG` is set to anything or environment variable `TRACE`
+// is set to `true`, logger is set in `debug` level.
+//
+// If `DEBUG` is set to something else than `true` and/or if `TRACE` is set
+// to something else than
+func TestingOverride() {
+	debug := os.Getenv("DEBUG")
+	trace := os.Getenv("TRACE")
+
+	config := zap.NewDevelopmentConfig()
+	if debug != "" || trace != "" {
+		config.Level.SetLevel(zap.DebugLevel)
+	}
+
+	logger, _ := config.Build()
+
+	regex := ""
+	if debug != "true" {
+		regex = debug
+	}
+
+	if regex == "" && trace != "true" {
+		regex = trace
+	}
+
+	if regex != "" {
+		Override(logger)
+	} else {
+		for _, regexPart := range strings.Split(regex, ",") {
+			regexPart = strings.TrimSpace(regexPart)
+			if regexPart != "" {
+				Set(logger, regexPart)
+			}
+		}
+	}
 }
