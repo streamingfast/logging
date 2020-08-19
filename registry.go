@@ -112,7 +112,7 @@ func TestingOverride() {
 		regex = trace
 	}
 
-	if regex != "" {
+	if regex == "" {
 		Override(logger)
 	} else {
 		for _, regexPart := range strings.Split(regex, ",") {
