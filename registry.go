@@ -95,13 +95,11 @@ func Override(logger *zap.Logger) {
 func TestingOverride() {
 	debug := os.Getenv("DEBUG")
 	trace := os.Getenv("TRACE")
-
-	config := zap.NewDevelopmentConfig()
-	if debug != "" || trace != "" {
-		config.Level.SetLevel(zap.DebugLevel)
+	if debug == "" && trace == "" {
+		return
 	}
 
-	logger, _ := config.Build()
+	logger, _ := zap.NewDevelopment()
 
 	regex := ""
 	if debug != "true" {
