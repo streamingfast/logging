@@ -23,28 +23,71 @@ import (
 	"go.uber.org/zap"
 )
 
+type registerConfig struct {
+	onUpdate func(newLogger *zap.Logger)
+}
+
+// RegisterOption are option parameters that you can set when registering a new logger
+// in the system using `Register` function.
+type RegisterOption interface {
+	apply(config *registerConfig)
+}
+
+type registerOptionFunc func(config *registerConfig)
+
+func (f registerOptionFunc) apply(config *registerConfig) {
+	f(config)
+}
+
+// RegisterOnUpdate enable you to have a hook function that will receive the new logger
+// that is going to be assigned to your logger instance. This is useful in some situation
+// where you need to update other instances or re-configuring a bit the logger when
+// a new one is attached.
+//
+// This is called **after** the instance has been re-assigned.
+func RegisterOnUpdate(onUpdate func(newLogger *zap.Logger)) RegisterOption {
+	return registerOptionFunc(func(config *registerConfig) {
+		config.onUpdate = onUpdate
+	})
+}
+
 type LoggerExtender func(*zap.Logger) *zap.Logger
 
-var registry = map[string]**zap.Logger{}
+type registryEntry struct {
+	logPtr   **zap.Logger
+	onUpdate func(newLogger *zap.Logger)
+}
+
+var registry = map[string]*registryEntry{}
 var defaultLogger = zap.NewNop()
 
-func Register(name string, zlogPtr **zap.Logger) {
+func Register(name string, zlogPtr **zap.Logger, options ...RegisterOption) {
 	if _, found := registry[name]; found {
 		panic(fmt.Sprintf("name already registered: %s", name))
 	}
 
-	registry[name] = zlogPtr
-	*zlogPtr = defaultLogger
+	config := registerConfig{}
+	for _, opt := range options {
+		opt.apply(&config)
+	}
+
+	entry := &registryEntry{
+		logPtr:   zlogPtr,
+		onUpdate: config.onUpdate,
+	}
+
+	registry[name] = entry
+	setLogger(entry, defaultLogger)
 }
 
 func Set(logger *zap.Logger, regexps ...string) {
-	for name, zlogPtr := range registry {
+	for name, entry := range registry {
 		if len(regexps) == 0 {
-			*zlogPtr = logger
+			setLogger(entry, logger)
 		} else {
 			for _, re := range regexps {
 				if regexp.MustCompile(re).MatchString(name) {
-					*zlogPtr = logger
+					setLogger(entry, logger)
 				}
 			}
 		}
@@ -59,17 +102,17 @@ func Set(logger *zap.Logger, regexps ...string) {
 // logger.Extend(func (current *zap.Logger) { return current.With("name", "value") }, "github.com/dfuse-io/app.*")
 // ```
 func Extend(extender LoggerExtender, regexps ...string) {
-	for name, zlogPtr := range registry {
-		if *zlogPtr == nil {
+	for name, entry := range registry {
+		if *entry.logPtr == nil {
 			continue
 		}
 
 		if len(regexps) == 0 {
-			*zlogPtr = extender(*zlogPtr)
+			setLogger(entry, extender(*entry.logPtr))
 		} else {
 			for _, re := range regexps {
 				if regexp.MustCompile(re).MatchString(name) {
-					*zlogPtr = extender(*zlogPtr)
+					setLogger(entry, extender(*entry.logPtr))
 				}
 			}
 		}
@@ -119,5 +162,16 @@ func TestingOverride() {
 				Set(logger, regexPart)
 			}
 		}
+	}
+}
+
+func setLogger(entry *registryEntry, logger *zap.Logger) {
+	if entry == nil || logger == nil {
+		return
+	}
+
+	*entry.logPtr = logger
+	if entry.onUpdate != nil {
+		entry.onUpdate(logger)
 	}
 }
