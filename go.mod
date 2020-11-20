@@ -8,6 +8,7 @@ require (
 	github.com/mitchellh/go-testing-interface v1.14.1
 	github.com/stretchr/testify v1.4.0
 	github.com/teris-io/shortid v0.0.0-20171029131806-771a37caa5cf
+	github.com/test-go/testify v1.1.4
 	go.opencensus.io v0.22.1
 	go.uber.org/zap v1.14.0
 )
