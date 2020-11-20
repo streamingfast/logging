@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -26,7 +25,6 @@ import (
 // In all other cases, tracing is disabled.
 func IsTraceEnabled(shortName string, packageID string) bool {
 	trace := os.Getenv("TRACE")
-	fmt.Printf("trace %q\n", trace)
 	if trace == "" {
 		return false
 	}
@@ -74,7 +72,6 @@ func (l logFilter) isDenied(name string, packageID string) bool {
 		return false
 	}
 
-	fmt.Println("query", query, matchPackage(query, name, packageID))
 	return matchPackage(query, name, packageID)
 }
 
