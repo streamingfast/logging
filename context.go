@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type loggerKeyType int
@@ -43,4 +44,28 @@ func Logger(ctx context.Context, fallbackLogger *zap.Logger) *zap.Logger {
 	}
 
 	return fallbackLogger
+}
+
+// Debug is a shortcut for `Logger(ctx, zlog).Debug("some message", ...some fields)`
+func Debug(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
+	log(ctx, fallbackLogger, zapcore.DebugLevel, msg, fields)
+}
+
+// Info is a shortcut for `Logger(ctx, zlog).Info("some message", ...some fields)`
+func Info(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
+	log(ctx, fallbackLogger, zapcore.InfoLevel, msg, fields)
+}
+
+// Warn is a shortcut for `Logger(ctx, zlog).Warn("some message", ...some fields)`
+func Warn(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
+	log(ctx, fallbackLogger, zapcore.WarnLevel, msg, fields)
+}
+
+// Error is a shortcut for `Logger(ctx, zlog).Error("some message", ...some fields)`
+func Error(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
+	log(ctx, fallbackLogger, zapcore.ErrorLevel, msg, fields)
+}
+
+func log(ctx context.Context, fallbackLogger *zap.Logger, level zapcore.Level, msg string, fields []zapcore.Field) {
+	Logger(ctx, fallbackLogger).Check(level, msg).Write(fields...)
 }
