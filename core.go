@@ -111,7 +111,6 @@ func IsProductionEnvironment() bool {
 	return !os.IsNotExist(err)
 }
 
-
 func BasicLoggingConfig(serviceName string, atomicLevel zap.AtomicLevel, opts ...zap.Option) *zap.Config {
 	var config zap.Config
 

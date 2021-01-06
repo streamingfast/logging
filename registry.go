@@ -62,6 +62,10 @@ var registry = map[string]*registryEntry{}
 var defaultLogger = zap.NewNop()
 
 func Register(name string, zlogPtr **zap.Logger, options ...RegisterOption) {
+	if zlogPtr == nil {
+		panic("the zlog pointer (of type **zap.Logger) must be set")
+	}
+
 	if _, found := registry[name]; found {
 		panic(fmt.Sprintf("name already registered: %s", name))
 	}
@@ -77,7 +81,13 @@ func Register(name string, zlogPtr **zap.Logger, options ...RegisterOption) {
 	}
 
 	registry[name] = entry
-	setLogger(entry, defaultLogger)
+
+	logger := defaultLogger
+	if *zlogPtr != nil {
+		logger = *zlogPtr
+	}
+
+	setLogger(entry, logger)
 }
 
 func Set(logger *zap.Logger, regexps ...string) {
