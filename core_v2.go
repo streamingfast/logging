@@ -132,7 +132,7 @@ func newLogger(opts *loggerOptions) (*zap.Logger, error) {
 	}
 
 	// Development logger
-	logStdoutWriter := zapcore.Lock(os.Stdout)
+	logStdoutWriter := zapcore.Lock(os.Stderr)
 	core := zapcore.NewCore(NewEncoder(opts.encoderVerbosity), logStdoutWriter, opts.level)
 
 	return zap.New(core), nil
