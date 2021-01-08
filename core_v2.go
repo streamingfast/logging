@@ -7,6 +7,7 @@ import (
 	"github.com/blendle/zapdriver"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 // This v2 version of `core.go` is a work in progress without any backwar compatibility
@@ -132,8 +133,9 @@ func newLogger(opts *loggerOptions) (*zap.Logger, error) {
 	}
 
 	// Development logger
+	isTTY := terminal.IsTerminal(int(os.Stderr.Fd()))
 	logStdoutWriter := zapcore.Lock(os.Stderr)
-	core := zapcore.NewCore(NewEncoder(opts.encoderVerbosity), logStdoutWriter, opts.level)
+	core := zapcore.NewCore(NewEncoder(opts.encoderVerbosity, isTTY), logStdoutWriter, opts.level)
 
 	return zap.New(core), nil
 }

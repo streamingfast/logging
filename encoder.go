@@ -18,7 +18,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math"
-	"os"
 	"path"
 	"strings"
 	"sync"
@@ -30,7 +29,6 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/crypto/ssh/terminal"
 )
 
 const (
@@ -84,9 +82,7 @@ type Encoder struct {
 // | v >= 4            | <Time>
 // |-------------------|
 
-func NewEncoder(verbosity int) zapcore.Encoder {
-	isTTY := terminal.IsTerminal(int(os.Stdout.Fd()))
-
+func NewEncoder(verbosity int, enableColors bool) zapcore.Encoder {
 	return &Encoder{
 		jsonEncoder: newJSONEncoder(zapcore.EncoderConfig{
 			EncodeDuration: zapcore.StringDurationEncoder,
@@ -102,7 +98,7 @@ func NewEncoder(verbosity int) zapcore.Encoder {
 		// Also always forced displayed on "Error" level and above
 		showStacktrace: verbosity >= 2,
 
-		enableAnsiColor: isTTY,
+		enableAnsiColor: enableColors,
 	}
 }
 
