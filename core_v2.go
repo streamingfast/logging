@@ -70,6 +70,15 @@ func WithZapOption(zapOption zap.Option) LoggerOption {
 	})
 }
 
+// NewNopLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
+// withing the logging registry.
+func NewNopLogger(shortName string, packageID string) *zap.Logger {
+	logger := zap.NewNop()
+
+	Register(packageID, &logger)
+	return logger
+}
+
 func NewSimpleLogger(shortName string, packageID string) *zap.Logger {
 	opts := []LoggerOption{
 		WithAtomicLevel(inferLevel()),
