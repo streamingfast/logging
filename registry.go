@@ -19,12 +19,16 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type registerConfig struct {
-	onUpdate func(newLogger *zap.Logger)
+	shortName      string
+	isTraceEnabled *bool
+	onUpdate       func(newLogger *zap.Logger)
 }
 
 // RegisterOption are option parameters that you can set when registering a new logger
@@ -51,23 +55,54 @@ func RegisterOnUpdate(onUpdate func(newLogger *zap.Logger)) RegisterOption {
 	})
 }
 
+func registerShortName(shortName string) RegisterOption {
+	return registerOptionFunc(func(config *registerConfig) {
+		config.shortName = shortName
+	})
+}
+
+func registerWithTracer(isEnabled *bool) RegisterOption {
+	return registerOptionFunc(func(config *registerConfig) {
+		config.isTraceEnabled = isEnabled
+	})
+}
+
 type LoggerExtender func(*zap.Logger) *zap.Logger
 
 type registryEntry struct {
-	logPtr   **zap.Logger
-	onUpdate func(newLogger *zap.Logger)
+	packageID    string
+	shortName    string
+	traceEnabled *bool
+	logPtr       **zap.Logger
+	onUpdate     func(newLogger *zap.Logger)
 }
 
-var registry = map[string]*registryEntry{}
+var globalRegistry = newRegistry()
 var defaultLogger = zap.NewNop()
 
-func Register(name string, zlogPtr **zap.Logger, options ...RegisterOption) {
+func Register(packageID string, zlogPtr **zap.Logger, options ...RegisterOption) {
+	register(globalRegistry, packageID, zlogPtr, options...)
+}
+
+func Register2(shortName string, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) Tracer {
+	return register2(globalRegistry, shortName, packageID, zlogPtr, options...)
+}
+
+func register2(registry *registry, shortName string, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) Tracer {
+	tracer := boolTracer{new(bool)}
+
+	allOptions := append([]RegisterOption{
+		registerShortName(shortName),
+		registerWithTracer(tracer.value),
+	}, options...)
+
+	register(registry, packageID, zlogPtr, allOptions...)
+	return tracer
+}
+
+func register(registry *registry, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) {
 	if zlogPtr == nil {
 		panic("the zlog pointer (of type **zap.Logger) must be set")
-	}
-
-	if _, found := registry[name]; found {
-		panic(fmt.Sprintf("name already registered: %s", name))
 	}
 
 	config := registerConfig{}
@@ -76,11 +111,14 @@ func Register(name string, zlogPtr **zap.Logger, options ...RegisterOption) {
 	}
 
 	entry := &registryEntry{
-		logPtr:   zlogPtr,
-		onUpdate: config.onUpdate,
+		packageID:    packageID,
+		shortName:    config.shortName,
+		traceEnabled: config.isTraceEnabled,
+		logPtr:       zlogPtr,
+		onUpdate:     config.onUpdate,
 	}
 
-	registry[name] = entry
+	registry.addEntry(entry)
 
 	logger := defaultLogger
 	if *zlogPtr != nil {
@@ -91,7 +129,7 @@ func Register(name string, zlogPtr **zap.Logger, options ...RegisterOption) {
 }
 
 func Set(logger *zap.Logger, regexps ...string) {
-	for name, entry := range registry {
+	for name, entry := range globalRegistry.entriesByPackageID {
 		if len(regexps) == 0 {
 			setLogger(entry, logger)
 		} else {
@@ -112,7 +150,7 @@ func Set(logger *zap.Logger, regexps ...string) {
 // logger.Extend(func (current *zap.Logger) { return current.With("name", "value") }, "github.com/dfuse-io/app.*")
 // ```
 func Extend(extender LoggerExtender, regexps ...string) {
-	for name, entry := range registry {
+	for name, entry := range globalRegistry.entriesByPackageID {
 		if *entry.logPtr == nil {
 			continue
 		}
@@ -184,4 +222,126 @@ func setLogger(entry *registryEntry, logger *zap.Logger) {
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
 	}
+}
+
+type registry struct {
+	sync.RWMutex
+
+	entriesByPackageID map[string]*registryEntry
+	entriesByShortName map[string][]*registryEntry
+}
+
+func newRegistry() *registry {
+	return &registry{
+		entriesByPackageID: make(map[string]*registryEntry),
+		entriesByShortName: make(map[string][]*registryEntry),
+	}
+}
+
+func (r *registry) addEntry(entry *registryEntry) {
+	if entry == nil {
+		panic("refusing to add a nil registry entry")
+	}
+
+	id := validateEntryIdentifier("package ID", entry.packageID)
+	shortName := validateEntryIdentifier("short name", entry.shortName)
+
+	if actual := r.entriesByPackageID[id]; actual != nil {
+		panic(fmt.Sprintf("packageID %q is already registered, actual entry short name is %q", id, actual.shortName))
+	}
+
+	entry.packageID = id
+	entry.shortName = shortName
+
+	r.entriesByPackageID[id] = entry
+	r.entriesByShortName[shortName] = append(r.entriesByShortName[shortName], entry)
+}
+
+func (r *registry) overrideFromSpec(spec *logLevelSpec, loggerFactory func(level zapcore.Level) *zap.Logger) {
+	for _, specForKey := range spec.sortedSpecs() {
+		if specForKey.key == "true" || specForKey.key == "*" {
+			for _, entry := range r.entriesByPackageID {
+				r.setLoggerForEntry(entry, specForKey.level, specForKey.trace, loggerFactory)
+			}
+
+			continue
+		}
+
+		r.setLoggerFromSpec(specForKey, loggerFactory)
+	}
+}
+
+func (r *registry) setLoggerFromSpec(spec *levelSpec, loggerFactory func(level zapcore.Level) *zap.Logger) {
+	entries, found := r.entriesByShortName[spec.key]
+	if found {
+		for _, entry := range entries {
+			r.setLoggerForEntry(entry, spec.level, spec.trace, loggerFactory)
+		}
+		return
+	}
+
+	entry, found := r.entriesByPackageID[spec.key]
+	if found {
+		r.setLoggerForEntry(entry, spec.level, spec.trace, loggerFactory)
+		return
+	}
+
+	regex := regexp.MustCompile(spec.key)
+	for packageID, entry := range globalRegistry.entriesByPackageID {
+		if regex.MatchString(packageID) {
+			r.setLoggerForEntry(entry, spec.level, spec.trace, loggerFactory)
+		}
+	}
+}
+
+func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, trace bool, loggerFactory func(level zapcore.Level) *zap.Logger) {
+	if entry == nil {
+		return
+	}
+
+	logger := loggerFactory(level)
+
+	*entry.logPtr = logger
+	*entry.traceEnabled = trace
+
+	if entry.onUpdate != nil {
+		entry.onUpdate(logger)
+	}
+}
+
+func (r *registry) hasPackageID(packageID string) bool {
+	return r.entriesByPackageID[packageID] != nil
+}
+
+func (r *registry) hasShortName(shortName string) bool {
+	return len(r.entriesByShortName[shortName]) > 0
+}
+
+func validateEntryIdentifier(tag string, rawInput string) string {
+	input := strings.TrimSpace(rawInput)
+	if input == "" {
+		panic(fmt.Errorf("the %s %q is invalid, must not be empty", tag, input))
+	}
+
+	if input == "true" {
+		panic(fmt.Errorf("the %s %q is invalid, the identifier 'true' is reserved", tag, input))
+	}
+
+	if input == "*" {
+		panic(fmt.Errorf("the %s %q is invalid, the identifier '*' is reserved", tag, input))
+	}
+
+	if strings.Contains(input, "-") {
+		panic(fmt.Errorf("the %s %q is invalid, must not contain the '-' character", tag, input))
+	}
+
+	if strings.Contains(input, ",") {
+		panic(fmt.Errorf("the %s %q is invalid, must not contain the ',' character", tag, input))
+	}
+
+	if strings.Contains(input, "=") {
+		panic(fmt.Errorf("the %s %q is invalid, must not contain the ',' character", tag, input))
+	}
+
+	return input
 }
