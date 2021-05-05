@@ -84,10 +84,6 @@ func Register(packageID string, zlogPtr **zap.Logger, options ...RegisterOption)
 	register(globalRegistry, packageID, zlogPtr, options...)
 }
 
-func Register2(shortName string, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) Tracer {
-	return register2(globalRegistry, shortName, packageID, zlogPtr, options...)
-}
-
 func register2(registry *registry, shortName string, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) Tracer {
 	tracer := boolTracer{new(bool)}
 
@@ -331,8 +327,8 @@ func validateEntryIdentifier(tag string, rawInput string) string {
 		panic(fmt.Errorf("the %s %q is invalid, the identifier '*' is reserved", tag, input))
 	}
 
-	if strings.Contains(input, "-") {
-		panic(fmt.Errorf("the %s %q is invalid, must not contain the '-' character", tag, input))
+	if strings.HasPrefix(input, "-") {
+		panic(fmt.Errorf("the %s %q is invalid, must not starts with the '-' character", tag, input))
 	}
 
 	if strings.Contains(input, ",") {
@@ -340,7 +336,7 @@ func validateEntryIdentifier(tag string, rawInput string) string {
 	}
 
 	if strings.Contains(input, "=") {
-		panic(fmt.Errorf("the %s %q is invalid, must not contain the ',' character", tag, input))
+		panic(fmt.Errorf("the %s %q is invalid, must not contain the '=' character", tag, input))
 	}
 
 	return input

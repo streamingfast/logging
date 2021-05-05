@@ -39,7 +39,7 @@ func TestSortedEntriesFromEnv(t *testing.T) {
 				"TRACE": "*",
 			}),
 			[]*levelSpec{
-				{key: "t", level: zapcore.DebugLevel, trace: true, ordering: 1},
+				{key: "*", level: zapcore.DebugLevel, trace: true, ordering: 1},
 			},
 		},
 	}
