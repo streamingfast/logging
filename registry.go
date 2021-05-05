@@ -239,18 +239,20 @@ func (r *registry) addEntry(entry *registryEntry) {
 		panic("refusing to add a nil registry entry")
 	}
 
-	id := validateEntryIdentifier("package ID", entry.packageID)
-	shortName := validateEntryIdentifier("short name", entry.shortName)
+	id := validateEntryIdentifier("package ID", entry.packageID, false)
+	shortName := validateEntryIdentifier("short name", entry.shortName, true)
 
 	if actual := r.entriesByPackageID[id]; actual != nil {
-		panic(fmt.Sprintf("packageID %q is already registered, actual entry short name is %q", id, actual.shortName))
+		panic(fmt.Sprintf("packageID %q is already registered", id))
 	}
 
 	entry.packageID = id
 	entry.shortName = shortName
 
 	r.entriesByPackageID[id] = entry
-	r.entriesByShortName[shortName] = append(r.entriesByShortName[shortName], entry)
+	if shortName != "" {
+		r.entriesByShortName[shortName] = append(r.entriesByShortName[shortName], entry)
+	}
 }
 
 func (r *registry) overrideFromSpec(spec *logLevelSpec, loggerFactory func(level zapcore.Level) *zap.Logger) {
@@ -313,9 +315,9 @@ func (r *registry) hasShortName(shortName string) bool {
 	return len(r.entriesByShortName[shortName]) > 0
 }
 
-func validateEntryIdentifier(tag string, rawInput string) string {
+func validateEntryIdentifier(tag string, rawInput string, allowEmpty bool) string {
 	input := strings.TrimSpace(rawInput)
-	if input == "" {
+	if input == "" && !allowEmpty {
 		panic(fmt.Errorf("the %s %q is invalid, must not be empty", tag, input))
 	}
 
