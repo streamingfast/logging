@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -86,13 +85,27 @@ func TestAppAndLibLogger_DebugTrue(t *testing.T) {
 	libTracer := libraryLogger(registry, "lib", "com/lib", &libLogger)
 	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
 
-	fmt.Printf("Lib logger **%p, actual %p\n", &libLogger, libLogger)
-
 	assertLevelEnabled(t, libLogger, zap.DebugLevel)
 	assert.False(t, libTracer.Enabled())
 
 	assertLevelEnabled(t, appLogger, zap.DebugLevel)
 	assert.False(t, appTracer.Enabled())
+}
+
+func TestAppAndLibLogger_LibViaLegacyRegister(t *testing.T) {
+	env := fakeEnv(map[string]string{
+		"DEBUG": "*",
+	})
+
+	registry := newRegistry()
+	libLogger := noopLogger()
+	appLogger := noopLogger()
+
+	register(registry, "com/lib", &libLogger)
+	applicationLogger(registry, env, "test", "com/test", &appLogger)
+
+	assertLevelEnabled(t, libLogger, zap.DebugLevel)
+	assertLevelEnabled(t, appLogger, zap.DebugLevel)
 }
 
 func assertLevelEnabled(t *testing.T, logger *zap.Logger, level zapcore.Level) {

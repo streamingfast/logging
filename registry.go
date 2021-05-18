@@ -300,7 +300,12 @@ func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, 
 	logger := loggerFactory(level)
 
 	*entry.logPtr = logger
-	*entry.traceEnabled = trace
+
+	// It's possible for an entry to have no tracer registered, for example if the legacy
+	// register method is used. We must protect from this and not set anything.
+	if entry.traceEnabled != nil {
+		*entry.traceEnabled = trace
+	}
 
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
