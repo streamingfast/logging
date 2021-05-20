@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -108,6 +109,29 @@ func TestAppAndLibLogger_LibViaLegacyRegister(t *testing.T) {
 	assertLevelEnabled(t, appLogger, zap.DebugLevel)
 }
 
+func TestLogger_CustomizedNamePerLogger(t *testing.T) {
+	env := fakeEnv(map[string]string{
+		"DEBUG": "*",
+	})
+
+	registry := newRegistry()
+	libLogger := noopLogger()
+	appLogger := noopLogger()
+
+	testingCore := newTestingCore()
+
+	libraryLogger(registry, "libName", "com/lib", &libLogger)
+	applicationLogger(registry, env, "appName", "com/test", &appLogger, withTestingCore(testingCore))
+
+	// Write log statements
+	libLogger.Info("lib")
+	appLogger.Info("app")
+
+	require.Len(t, testingCore.checkedEntries, 2)
+	assert.Equal(t, "libName", testingCore.at(0).LoggerName)
+	assert.Equal(t, "appName", testingCore.at(1).LoggerName)
+}
+
 func assertLevelEnabled(t *testing.T, logger *zap.Logger, level zapcore.Level) {
 	t.Helper()
 
@@ -135,4 +159,33 @@ var fakeEnv = func(in map[string]string) func(string) string {
 
 func noopLogger() *zap.Logger {
 	return zap.NewNop()
+}
+
+type testingCore struct {
+	checkedEntries []zapcore.Entry
+}
+
+func (*testingCore) Enabled(zapcore.Level) bool          { return true }
+func (c *testingCore) With([]zapcore.Field) zapcore.Core { return c }
+func (c *testingCore) Check(entry zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	c.checkedEntries = append(c.checkedEntries, entry)
+	return ce
+}
+func (c *testingCore) Write(entry zapcore.Entry, _ []zapcore.Field) error {
+	return nil
+}
+func (*testingCore) Sync() error { return nil }
+
+func newTestingCore() *testingCore {
+	return &testingCore{}
+}
+
+func (c *testingCore) at(index int) zapcore.Entry {
+	return c.checkedEntries[index]
+}
+
+func withTestingCore(t *testingCore) LoggerOption {
+	return WithZapOption(zap.WrapCore(func(c zapcore.Core) zapcore.Core {
+		return t
+	}))
 }

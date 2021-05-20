@@ -10,6 +10,8 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
+type loggerFactory func(name string, level zapcore.Level) *zap.Logger
+
 // This v2 version of `core.go` is a work in progress without any backwar compatibility
 // version. It might not made it to an official version of the library so you can depend
 // at your own risk.
@@ -18,10 +20,12 @@ type loggerOptions struct {
 	autoStartSwitcherServer *bool
 	encoderVerbosity        *int
 	level                   *zap.AtomicLevel
-	loggerName              *string
 	reportAllErrors         *bool
 	serviceName             *string
 	zapOptions              []zap.Option
+
+	// Use internally only, no With... value defined for it
+	loggerName string
 }
 
 type LoggerOption interface {
@@ -43,12 +47,6 @@ func WithAutoStartSwitcherServer() LoggerOption {
 func WithAtomicLevel(level zap.AtomicLevel) LoggerOption {
 	return loggerFuncOption(func(o *loggerOptions) {
 		o.level = ptrLevel(level)
-	})
-}
-
-func WithLoggerName(name string) LoggerOption {
-	return loggerFuncOption(func(o *loggerOptions) {
-		o.loggerName = ptrString(name)
 	})
 }
 
@@ -115,13 +113,17 @@ func applicationLogger(
 
 	tracer := register2(registry, shortName, packageID, logger)
 
-	loggerFactory := func(level zapcore.Level) *zap.Logger {
-		// If the level was specified up-front, let's not use the one received
-		if loggerOptions.level != nil {
-			return newLogger(&loggerOptions)
+	loggerFactory := func(name string, level zapcore.Level) *zap.Logger {
+		clonedOptions := loggerOptions
+		if name != "" {
+			clonedOptions.loggerName = name
 		}
 
-		clonedOptions := loggerOptions
+		// If the level was specified up-front, let's not use the one received
+		if loggerOptions.level != nil {
+			return newLogger(&clonedOptions)
+		}
+
 		clonedOptions.level = ptrLevel(zap.NewAtomicLevelAt(level))
 
 		return newLogger(&clonedOptions)
@@ -137,6 +139,11 @@ func applicationLogger(
 	if *appEntry.logPtr != nil && *appEntry.logPtr == initialLogger {
 		// No environment override the default logger, let's force INFO to be used in this case
 		registry.setLoggerForEntry(appEntry, zapcore.InfoLevel, false, loggerFactory)
+	}
+
+	// Hijack standard Golang `log` and redirect it to our common logger
+	if *appEntry.logPtr != nil {
+		zap.RedirectStdLogAt(*appEntry.logPtr, zap.DebugLevel)
 	}
 
 	return tracer
@@ -164,10 +171,6 @@ func MaybeNewLogger(opts ...LoggerOption) (*zap.Logger, error) {
 		return nil, err
 	}
 
-	if options.loggerName != nil {
-		logger = logger.Named(*options.loggerName)
-	}
-
 	return logger, nil
 }
 
@@ -180,7 +183,13 @@ func newLogger(opts *loggerOptions) *zap.Logger {
 	return logger
 }
 
-func maybeNewLogger(opts *loggerOptions) (*zap.Logger, error) {
+func maybeNewLogger(opts *loggerOptions) (logger *zap.Logger, err error) {
+	defer func() {
+		if logger != nil && opts.loggerName != "" {
+			logger = logger.Named(opts.loggerName)
+		}
+	}()
+
 	zapOptions := opts.zapOptions
 
 	if isProductionEnvironment() {
@@ -206,31 +215,8 @@ func maybeNewLogger(opts *loggerOptions) (*zap.Logger, error) {
 		verbosity = *opts.encoderVerbosity
 	}
 
-	return zap.New(zapcore.NewCore(NewEncoder(verbosity, isTTY), logStdoutWriter, opts.level)), nil
+	return zap.New(zapcore.NewCore(NewEncoder(verbosity, isTTY), logStdoutWriter, opts.level), zapOptions...), nil
 }
-
-// func newDefaultLoggerOptions() (o *loggerOptions) {
-// 	return &loggerOptions{
-// 		encoderVerbosity: inferEncoderVerbosity(),
-// 		level:            inferLevel(),
-// 	}
-// }
-
-// func inferLevel() zap.AtomicLevel {
-// 	if os.Getenv("DEBUG") != "" || os.Getenv("TRACE") != "" {
-// 		return zap.NewAtomicLevelAt(zapcore.DebugLevel)
-// 	}
-
-// 	return zap.NewAtomicLevelAt(zapcore.InfoLevel)
-// }
-
-// func inferEncoderVerbosity() int {
-// 	if os.Getenv("DEBUG") != "" || os.Getenv("TRACE") != "" {
-// 		return 3
-// 	}
-
-// 	return 1
-// }
 
 func isProductionEnvironment() bool {
 	_, err := os.Stat("/.dockerenv")

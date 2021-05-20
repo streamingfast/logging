@@ -255,49 +255,49 @@ func (r *registry) addEntry(entry *registryEntry) {
 	}
 }
 
-func (r *registry) overrideFromSpec(spec *logLevelSpec, loggerFactory func(level zapcore.Level) *zap.Logger) {
+func (r *registry) overrideFromSpec(spec *logLevelSpec, factory loggerFactory) {
 	for _, specForKey := range spec.sortedSpecs() {
 		if specForKey.key == "true" || specForKey.key == "*" {
 			for _, entry := range r.entriesByPackageID {
-				r.setLoggerForEntry(entry, specForKey.level, specForKey.trace, loggerFactory)
+				r.setLoggerForEntry(entry, specForKey.level, specForKey.trace, factory)
 			}
 
 			continue
 		}
 
-		r.setLoggerFromSpec(specForKey, loggerFactory)
+		r.setLoggerFromSpec(specForKey, factory)
 	}
 }
 
-func (r *registry) setLoggerFromSpec(spec *levelSpec, loggerFactory func(level zapcore.Level) *zap.Logger) {
+func (r *registry) setLoggerFromSpec(spec *levelSpec, factory loggerFactory) {
 	entries, found := r.entriesByShortName[spec.key]
 	if found {
 		for _, entry := range entries {
-			r.setLoggerForEntry(entry, spec.level, spec.trace, loggerFactory)
+			r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
 		}
 		return
 	}
 
 	entry, found := r.entriesByPackageID[spec.key]
 	if found {
-		r.setLoggerForEntry(entry, spec.level, spec.trace, loggerFactory)
+		r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
 		return
 	}
 
 	regex := regexp.MustCompile(spec.key)
 	for packageID, entry := range globalRegistry.entriesByPackageID {
 		if regex.MatchString(packageID) {
-			r.setLoggerForEntry(entry, spec.level, spec.trace, loggerFactory)
+			r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
 		}
 	}
 }
 
-func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, trace bool, loggerFactory func(level zapcore.Level) *zap.Logger) {
+func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, trace bool, factory loggerFactory) {
 	if entry == nil {
 		return
 	}
 
-	logger := loggerFactory(level)
+	logger := factory(entry.shortName, level)
 
 	*entry.logPtr = logger
 
