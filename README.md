@@ -2,7 +2,7 @@
 [![reference](https://img.shields.io/badge/godoc-reference-5272B4.svg?style=flat-square)](https://pkg.go.dev/github.com/streamingfast/logging)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-This is the logging library used as part of **[dfuse](https://github.com/dfuse-io/dfuse)**.
+This is the logging library used as part of **[StreamingFast](https://github.com/streamingfast/streamingfast)**.
 
 
 ## Usage
