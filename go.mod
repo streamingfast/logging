@@ -1,4 +1,4 @@
-module github.com/dfuse-io/logging
+module github.com/streamingfast/logging
 
 go 1.13
 
