@@ -81,8 +81,8 @@ func matchPackage(query string, name string, packageID string) bool {
 	}
 
 	regex, err := regexp.Compile(query)
-	if err == nil {
-		return regex.MatchString(packageID)
+	if (err == nil && regex.MatchString(packageID)) || (err != nil && query == packageID) {
+		return true
 	}
 
 	return false

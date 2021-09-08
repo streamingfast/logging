@@ -5,9 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type logChangeReq struct {
@@ -34,43 +31,17 @@ func (h *switcherServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	switch strings.ToLower(in.Level) {
-	case "warn", "warning":
-		h.changeLoggersLevel(in.Inputs, zap.WarnLevel, disableTracing)
-	case "info":
-		h.changeLoggersLevel(in.Inputs, zap.InfoLevel, disableTracing)
-	case "debug":
-		h.changeLoggersLevel(in.Inputs, zap.DebugLevel, disableTracing)
-	case "trace":
-		h.changeLoggersLevel(in.Inputs, zap.DebugLevel, enableTracing)
-	default:
+	level := strings.ToUpper(in.Level)
+	if level != "WARN" && level != "WARNING" && level != "INFO" && level != "DEBUG" && level != "TRACE" {
 		http.Error(w, fmt.Sprintf("invalid level value %q", in.Level), 400)
 		return
 	}
 
+	spec := newLogLevelSpecFromMap(map[string]string{
+		strings.ToUpper(in.Level): in.Inputs,
+	})
+
+	globalRegistry.overrideFromSpec(spec, globalRegistry.factory)
+
 	w.Write([]byte("ok"))
-}
-
-func (h *switcherServerHandler) changeLoggersLevel(inputs string, level zapcore.Level, tracing tracingType) {
-	extender := overrideLoggerLevel(level)
-
-	for _, input := range strings.Split(inputs, ",") {
-		if entries, found := h.registry.entriesByShortName[input]; found {
-			for _, entry := range entries {
-				if *entry.logPtr == nil {
-					continue
-				}
-
-				setLogger(entry, extender(*entry.logPtr), tracing)
-			}
-		} else {
-			extend(overrideLoggerLevel(level), tracing, input)
-		}
-	}
-}
-
-func overrideLoggerLevel(level zapcore.Level) LoggerExtender {
-	return func(current *zap.Logger) *zap.Logger {
-		return current.WithOptions(WithLevel(level))
-	}
 }

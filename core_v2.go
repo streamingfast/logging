@@ -25,9 +25,31 @@ type loggerOptions struct {
 	switcherServerAutoStart  *bool
 	switcherServerListenAddr string
 	zapOptions               []zap.Option
+	registerOptions          []RegisterOption
 
 	// Use internally only, no With... value defined for it
 	loggerName string
+}
+
+func newLoggerOptions(shortName string, opts ...LoggerOption) loggerOptions {
+	loggerOptions := loggerOptions{switcherServerListenAddr: "127.0.0.1:1065"}
+	for _, opt := range opts {
+		opt.apply(&loggerOptions)
+	}
+
+	if loggerOptions.reportAllErrors == nil {
+		WithReportAllErrors().apply(&loggerOptions)
+	}
+
+	if loggerOptions.serviceName == nil && shortName != "" {
+		WithServiceName(shortName).apply(&loggerOptions)
+	}
+
+	if loggerOptions.switcherServerAutoStart == nil && isProductionEnvironment() {
+		WithSwitcherServerAutoStart().apply(&loggerOptions)
+	}
+
+	return loggerOptions
 }
 
 type LoggerOption interface {
@@ -70,15 +92,21 @@ func WithZapOption(zapOption zap.Option) LoggerOption {
 	})
 }
 
+func WithOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
+	return loggerFuncOption(func(o *loggerOptions) {
+		o.registerOptions = append(o.registerOptions, RegisterOnUpdate(onUpdate))
+	})
+}
+
 // LibraryLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
 // withing the logging registry with a tracer that can be be used for conditionally tracing
 // code.
-func LibraryLogger(shortName string, packageID string, logger **zap.Logger) Tracer {
-	return libraryLogger(globalRegistry, shortName, packageID, logger)
+func LibraryLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+	return libraryLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
 }
 
-func libraryLogger(registry *registry, shortName string, packageID string, logger **zap.Logger) Tracer {
-	return register2(registry, shortName, packageID, logger)
+func libraryLogger(registry *registry, shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+	return register2(registry, shortName, packageID, logger, registerOptions...)
 }
 
 // ApplicationLogger should be used to get a logger for a top-level binary application which will
@@ -108,26 +136,10 @@ func applicationLogger(
 	logger **zap.Logger,
 	opts ...LoggerOption,
 ) Tracer {
-	loggerOptions := loggerOptions{switcherServerListenAddr: "127.0.0.1:1065"}
-	for _, opt := range opts {
-		opt.apply(&loggerOptions)
-	}
+	loggerOptions := newLoggerOptions(shortName, opts...)
+	tracer := register2(registry, shortName, packageID, logger, loggerOptions.registerOptions...)
 
-	if loggerOptions.reportAllErrors == nil {
-		WithReportAllErrors().apply(&loggerOptions)
-	}
-
-	if loggerOptions.serviceName == nil {
-		WithServiceName(shortName).apply(&loggerOptions)
-	}
-
-	if loggerOptions.switcherServerAutoStart == nil && isProductionEnvironment() {
-		opts = append(opts, WithSwitcherServerAutoStart())
-	}
-
-	tracer := register2(registry, shortName, packageID, logger)
-
-	loggerFactory := func(name string, level zapcore.Level) *zap.Logger {
+	registry.factory = func(name string, level zapcore.Level) *zap.Logger {
 		clonedOptions := loggerOptions
 		if name != "" {
 			clonedOptions.loggerName = name
@@ -147,12 +159,12 @@ func applicationLogger(
 	initialLogger := *logger
 
 	logLevelSpec := newLogLevelSpec(envGet)
-	registry.overrideFromSpec(logLevelSpec, loggerFactory)
+	registry.overrideFromSpec(logLevelSpec, registry.factory)
 
 	appEntry := registry.entriesByPackageID[packageID]
 	if *appEntry.logPtr != nil && *appEntry.logPtr == initialLogger {
 		// No environment override the default logger, let's force INFO to be used in this case
-		registry.setLoggerForEntry(appEntry, zapcore.InfoLevel, false, loggerFactory)
+		registry.setLoggerForEntry(appEntry, zapcore.InfoLevel, false, registry.factory)
 	}
 
 	appLogger := zap.NewNop()

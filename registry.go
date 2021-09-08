@@ -131,7 +131,8 @@ func Set(logger *zap.Logger, regexps ...string) {
 			setLogger(entry, logger, unspecifiedTracing)
 		} else {
 			for _, re := range regexps {
-				if regexp.MustCompile(re).MatchString(name) {
+				regex, err := regexp.Compile(re)
+				if (err == nil && regex.MatchString(name)) || (err != nil && name == re) {
 					setLogger(entry, logger, unspecifiedTracing)
 				}
 			}
@@ -157,11 +158,11 @@ func extend(extender LoggerExtender, tracing tracingType, regexps ...string) {
 		}
 
 		if len(regexps) == 0 {
-			setLogger(entry, extender(*entry.logPtr), unspecifiedTracing)
+			setLogger(entry, extender(*entry.logPtr), tracing)
 		} else {
 			for _, re := range regexps {
 				if regexp.MustCompile(re).MatchString(name) {
-					setLogger(entry, extender(*entry.logPtr), unspecifiedTracing)
+					setLogger(entry, extender(*entry.logPtr), tracing)
 				}
 			}
 		}
@@ -245,6 +246,7 @@ func setLogger(entry *registryEntry, logger *zap.Logger, tracing tracingType) {
 type registry struct {
 	sync.RWMutex
 
+	factory            loggerFactory
 	entriesByPackageID map[string]*registryEntry
 	entriesByShortName map[string][]*registryEntry
 }
@@ -253,6 +255,14 @@ func newRegistry() *registry {
 	return &registry{
 		entriesByPackageID: make(map[string]*registryEntry),
 		entriesByShortName: make(map[string][]*registryEntry),
+		factory: func(name string, level zapcore.Level) *zap.Logger {
+			loggerOptions := newLoggerOptions("", WithAtomicLevel(zap.NewAtomicLevelAt(level)))
+			if name != "" {
+				loggerOptions.loggerName = name
+			}
+
+			return newLogger(&loggerOptions)
+		},
 	}
 }
 
@@ -306,9 +316,9 @@ func (r *registry) setLoggerFromSpec(spec *levelSpec, factory loggerFactory) {
 		return
 	}
 
-	regex := regexp.MustCompile(spec.key)
+	regex, err := regexp.Compile(spec.key)
 	for packageID, entry := range globalRegistry.entriesByPackageID {
-		if regex.MatchString(packageID) {
+		if (err == nil && regex.MatchString(packageID)) || (err != nil && packageID == spec.key) {
 			r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
 		}
 	}
@@ -332,14 +342,6 @@ func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, 
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
 	}
-}
-
-func (r *registry) hasPackageID(packageID string) bool {
-	return r.entriesByPackageID[packageID] != nil
-}
-
-func (r *registry) hasShortName(shortName string) bool {
-	return len(r.entriesByShortName[shortName]) > 0
 }
 
 func validateEntryIdentifier(tag string, rawInput string, allowEmpty bool) string {

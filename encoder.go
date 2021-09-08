@@ -150,7 +150,7 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 			}
 		}
 
-		line.AppendString(c.colorString(BlueFg.Nos(true), "("+loggerName+") "))
+		line.AppendString(c.colorString(BlueFg.Nos(true), "("+loggerName+")"))
 	}
 
 	message := ent.Message
@@ -158,7 +158,17 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 		message = strings.TrimSuffix(message, ".")
 	}
 
-	line.AppendString(c.colorString(lineColor.Nos(true), message))
+	// We perform a small variation when the message contains a newline separator. If this case, we assume the
+	// developer wanted to show a multi-line message, in such case, we print contextual information first
+	// then message. This improves a bit the rendering by making the contextual information closer to where
+	// it's important.
+	hasNewLineSeparator := strings.Contains(message, "\n")
+	endsWithNewLineSeparator := strings.HasSuffix(message, "\n")
+
+	if !hasNewLineSeparator {
+		line.AppendByte(' ')
+		line.AppendString(c.colorString(lineColor.Nos(true), message))
+	}
 
 	showCaller := (c.showCallerName || zap.WarnLevel.Enabled(ent.Level)) && ent.Caller.Defined
 	if showCaller && ent.LoggerName != "box" {
@@ -172,18 +182,25 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 
 	// Add any structured context even if len(fields) == 0 because there could be implicit (With()) fields
 	if c.enableAnsiColor {
-		line.AppendString(ansiColorEscape + grayFg.Nos(true) + "m ")
+		line.AppendString(ansiColorEscape + grayFg.Nos(true) + "m")
 	}
 	c.writeJSONFields(line, fields)
 	if c.enableAnsiColor {
 		line.AppendString(clearANSIModifier)
 	}
 
+	if hasNewLineSeparator {
+		line.AppendByte(' ')
+		line.AppendString(c.colorString(lineColor.Nos(true), message))
+	}
+
 	if ent.Stack != "" && (c.showStacktrace || zap.ErrorLevel.Enabled(ent.Level)) {
 		line.AppendString("\n" + c.colorString(lineColor.Nos(true), ent.Stack))
 	}
 
-	line.AppendString("\n")
+	if !endsWithNewLineSeparator {
+		line.AppendString("\n")
+	}
 
 	return line, nil
 }
@@ -212,6 +229,7 @@ func (c Encoder) writeJSONFields(line *buffer.Buffer, extra []zapcore.Field) {
 		return
 	}
 
+	line.AppendByte(' ')
 	line.AppendByte('{')
 	line.Write(context.buf.Bytes())
 	line.AppendByte('}')
