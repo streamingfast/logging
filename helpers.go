@@ -18,9 +18,10 @@ import (
 	"flag"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
-// FlagFields returns all falg as `zap.Field` element for easy logging
+// FlagFields returns all flag as `zap.Field` element for easy logging
 func FlagFields(extraFields ...zap.Field) []zap.Field {
 	fields := extraFields
 	flag.VisitAll(func(visitedFlag *flag.Flag) {
@@ -28,4 +29,42 @@ func FlagFields(extraFields ...zap.Field) []zap.Field {
 	})
 
 	return fields
+}
+
+// WithLevel returns a zap WrapCore option that change the underlying level.
+//
+// *Important!* This does not work with all underlying core
+//              implementation. See https://github.com/uber-go/zap/issues/581#issuecomment-600641485
+//              for details.
+func WithLevel(level zapcore.Level) zap.Option {
+	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return &coreWithLevel{
+			Core:  core,
+			level: level,
+		}
+	})
+}
+
+type coreWithLevel struct {
+	zapcore.Core
+	level zapcore.Level
+}
+
+func (c *coreWithLevel) Enabled(level zapcore.Level) bool {
+	return c.level.Enabled(level)
+}
+
+func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if !c.level.Enabled(e.Level) {
+		return ce
+	}
+
+	return ce.AddCore(e, c.Core)
+}
+
+func (c *coreWithLevel) With(fields []zap.Field) zapcore.Core {
+	return &coreWithLevel{
+		Core:  c.Core.With(fields),
+		level: c.level,
+	}
 }

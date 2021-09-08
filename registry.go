@@ -121,17 +121,18 @@ func register(registry *registry, packageID string, zlogPtr **zap.Logger, option
 		logger = *zlogPtr
 	}
 
-	setLogger(entry, logger)
+	// The tracing has already been set, so we can go unspecified here to not change anything
+	setLogger(entry, logger, unspecifiedTracing)
 }
 
 func Set(logger *zap.Logger, regexps ...string) {
 	for name, entry := range globalRegistry.entriesByPackageID {
 		if len(regexps) == 0 {
-			setLogger(entry, logger)
+			setLogger(entry, logger, unspecifiedTracing)
 		} else {
 			for _, re := range regexps {
 				if regexp.MustCompile(re).MatchString(name) {
-					setLogger(entry, logger)
+					setLogger(entry, logger, unspecifiedTracing)
 				}
 			}
 		}
@@ -146,17 +147,21 @@ func Set(logger *zap.Logger, regexps ...string) {
 // logger.Extend(func (current *zap.Logger) { return current.With("name", "value") }, "github.com/dfuse-io/app.*")
 // ```
 func Extend(extender LoggerExtender, regexps ...string) {
+	extend(extender, unspecifiedTracing, regexps...)
+}
+
+func extend(extender LoggerExtender, tracing tracingType, regexps ...string) {
 	for name, entry := range globalRegistry.entriesByPackageID {
 		if *entry.logPtr == nil {
 			continue
 		}
 
 		if len(regexps) == 0 {
-			setLogger(entry, extender(*entry.logPtr))
+			setLogger(entry, extender(*entry.logPtr), unspecifiedTracing)
 		} else {
 			for _, re := range regexps {
 				if regexp.MustCompile(re).MatchString(name) {
-					setLogger(entry, extender(*entry.logPtr))
+					setLogger(entry, extender(*entry.logPtr), unspecifiedTracing)
 				}
 			}
 		}
@@ -209,12 +214,29 @@ func TestingOverride() {
 	}
 }
 
-func setLogger(entry *registryEntry, logger *zap.Logger) {
+type tracingType uint8
+
+const (
+	unspecifiedTracing tracingType = iota
+	enableTracing
+	disableTracing
+)
+
+func setLogger(entry *registryEntry, logger *zap.Logger, tracing tracingType) {
 	if entry == nil || logger == nil {
 		return
 	}
 
 	*entry.logPtr = logger
+	if entry.traceEnabled != nil && tracing != unspecifiedTracing {
+		switch tracing {
+		case enableTracing:
+			*entry.traceEnabled = true
+		case disableTracing:
+			*entry.traceEnabled = false
+		}
+	}
+
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
 	}

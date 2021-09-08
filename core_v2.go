@@ -2,6 +2,7 @@ package logging
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/blendle/zapdriver"
@@ -17,12 +18,13 @@ type loggerFactory func(name string, level zapcore.Level) *zap.Logger
 // at your own risk.
 
 type loggerOptions struct {
-	autoStartSwitcherServer *bool
-	encoderVerbosity        *int
-	level                   *zap.AtomicLevel
-	reportAllErrors         *bool
-	serviceName             *string
-	zapOptions              []zap.Option
+	encoderVerbosity         *int
+	level                    *zap.AtomicLevel
+	reportAllErrors          *bool
+	serviceName              *string
+	switcherServerAutoStart  *bool
+	switcherServerListenAddr string
+	zapOptions               []zap.Option
 
 	// Use internally only, no With... value defined for it
 	loggerName string
@@ -38,9 +40,9 @@ func (f loggerFuncOption) apply(o *loggerOptions) {
 	f(o)
 }
 
-func WithAutoStartSwitcherServer() LoggerOption {
+func WithSwitcherServerAutoStart() LoggerOption {
 	return loggerFuncOption(func(o *loggerOptions) {
-		o.autoStartSwitcherServer = ptrBool(true)
+		o.switcherServerAutoStart = ptrBool(true)
 	})
 }
 
@@ -79,9 +81,21 @@ func libraryLogger(registry *registry, shortName string, packageID string, logge
 	return register2(registry, shortName, packageID, logger)
 }
 
-// ApplicationLogger should be used to get a logger for a top-level binary application.
+// ApplicationLogger should be used to get a logger for a top-level binary application which will
+// immediately activate all registered loggers with a logger. The actual logger for all component
+// used is deried based on the identified environment and from environment variables.
 //
-// By default,
+// Here the set of rules used and the outcome they are giving:
+//
+//  1. If a production environment is detected (for now, only checking if file /.dockerenv exists)
+//     Use a JSON StackDriver compatible format
+//
+//  2. Otherwise
+//     Use a developer friendly colored format
+//
+//
+// *Note* The ApplicationLogger should be start only once per processed. That could be enforced
+//        in the future.
 func ApplicationLogger(shortName string, packageID string, logger **zap.Logger, opts ...LoggerOption) Tracer {
 	return applicationLogger(globalRegistry, os.Getenv, shortName, packageID, logger, opts...)
 }
@@ -94,7 +108,7 @@ func applicationLogger(
 	logger **zap.Logger,
 	opts ...LoggerOption,
 ) Tracer {
-	loggerOptions := loggerOptions{}
+	loggerOptions := loggerOptions{switcherServerListenAddr: "127.0.0.1:1065"}
 	for _, opt := range opts {
 		opt.apply(&loggerOptions)
 	}
@@ -107,8 +121,8 @@ func applicationLogger(
 		WithServiceName(shortName).apply(&loggerOptions)
 	}
 
-	if loggerOptions.autoStartSwitcherServer == nil && isProductionEnvironment() {
-		opts = append(opts, WithAutoStartSwitcherServer())
+	if loggerOptions.switcherServerAutoStart == nil && isProductionEnvironment() {
+		opts = append(opts, WithSwitcherServerAutoStart())
 	}
 
 	tracer := register2(registry, shortName, packageID, logger)
@@ -141,9 +155,24 @@ func applicationLogger(
 		registry.setLoggerForEntry(appEntry, zapcore.InfoLevel, false, loggerFactory)
 	}
 
-	// Hijack standard Golang `log` and redirect it to our common logger
+	appLogger := zap.NewNop()
 	if *appEntry.logPtr != nil {
-		zap.RedirectStdLogAt(*appEntry.logPtr, zap.DebugLevel)
+		appLogger = *appEntry.logPtr
+	}
+
+	// Hijack standard Golang `log` and redirect it to our common logger
+	zap.RedirectStdLogAt(appLogger, zap.DebugLevel)
+
+	if loggerOptions.switcherServerAutoStart != nil && *loggerOptions.switcherServerAutoStart {
+		go func() {
+			listenAddr := loggerOptions.switcherServerListenAddr
+			appLogger.Debug("starting atomic level switcher", zap.String("listen_addr", listenAddr))
+
+			handler := &switcherServerHandler{registry: registry}
+			if err := http.ListenAndServe(listenAddr, handler); err != nil {
+				appLogger.Warn("failed starting atomic level switcher", zap.Error(err), zap.String("listen_addr", listenAddr))
+			}
+		}()
 	}
 
 	return tracer
