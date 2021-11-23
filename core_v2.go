@@ -245,7 +245,10 @@ func maybeNewLogger(opts *loggerOptions) (logger *zap.Logger, err error) {
 			zapOptions = append(zapOptions, zapdriver.WrapCore(zapdriver.ServiceName(*serviceName)))
 		}
 
-		return zapdriver.NewProductionConfig().Build(zapOptions...)
+		config := zapdriver.NewProductionConfig()
+		config.Level = *opts.level
+
+		return config.Build(zapOptions...)
 	}
 
 	// Development logger
