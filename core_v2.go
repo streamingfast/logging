@@ -98,14 +98,21 @@ func WithOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
 	})
 }
 
-// LibraryLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
+// PackageLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
 // withing the logging registry with a tracer that can be be used for conditionally tracing
 // code.
-func LibraryLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
-	return libraryLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
+//
+// You should used this in packages that are not `main` packages
+func PackageLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+	return packageLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
 }
 
-func libraryLogger(registry *registry, shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+// Deprecated: Use PackageLogger instead, scheduled for removal, time frame undefined for now
+func LibraryLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+	return packageLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
+}
+
+func packageLogger(registry *registry, shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
 	return register2(registry, shortName, packageID, logger, registerOptions...)
 }
 

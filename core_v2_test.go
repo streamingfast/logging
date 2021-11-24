@@ -31,7 +31,7 @@ func TestApplicationLoggerOnly_DebugTrue(t *testing.T) {
 	assert.False(t, tracer.Enabled())
 }
 
-func TestApplicationLoggerOnly_DebugStar(t *testing.T) {
+func TestApplicationLoggerOnly_DebugStart(t *testing.T) {
 	env := fakeEnv(map[string]string{
 		"DEBUG": "*",
 	})
@@ -44,7 +44,7 @@ func TestApplicationLoggerOnly_DebugStar(t *testing.T) {
 	assert.False(t, tracer.Enabled())
 }
 
-func TestApplicationLoggerOnly_TraceStar(t *testing.T) {
+func TestApplicationLoggerOnly_TraceStart(t *testing.T) {
 	env := fakeEnv(map[string]string{
 		"TRACE": "*",
 	})
@@ -57,55 +57,55 @@ func TestApplicationLoggerOnly_TraceStar(t *testing.T) {
 	assert.True(t, tracer.Enabled())
 }
 
-func TestAppAndLibLogger(t *testing.T) {
+func TestAppAndPkgLogger(t *testing.T) {
 	env := noEnv
 
 	registry := newRegistry()
-	libLogger := noopLogger()
+	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	libTracer := libraryLogger(registry, "lib", "com/lib", &libLogger)
+	pkgTracer := packageLogger(registry, "lib", "com/lib", &pkgLogger)
 	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
 
-	assertLevelEnabled(t, libLogger, zap.PanicLevel)
-	assert.False(t, libTracer.Enabled())
+	assertLevelEnabled(t, pkgLogger, zap.PanicLevel)
+	assert.False(t, pkgTracer.Enabled())
 
 	assertLevelEnabled(t, appLogger, zap.InfoLevel)
 	assert.False(t, appTracer.Enabled())
 }
 
-func TestAppAndLibLogger_DebugTrue(t *testing.T) {
+func TestAppAndPkgLogger_DebugTrue(t *testing.T) {
 	env := fakeEnv(map[string]string{
 		"DEBUG": "*",
 	})
 
 	registry := newRegistry()
-	libLogger := noopLogger()
+	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	libTracer := libraryLogger(registry, "lib", "com/lib", &libLogger)
+	pkgTracer := packageLogger(registry, "lib", "com/lib", &pkgLogger)
 	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
 
-	assertLevelEnabled(t, libLogger, zap.DebugLevel)
-	assert.False(t, libTracer.Enabled())
+	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
+	assert.False(t, pkgTracer.Enabled())
 
 	assertLevelEnabled(t, appLogger, zap.DebugLevel)
 	assert.False(t, appTracer.Enabled())
 }
 
-func TestAppAndLibLogger_LibViaLegacyRegister(t *testing.T) {
+func TestAppAndPkgLogger_PkgViaLegacyRegister(t *testing.T) {
 	env := fakeEnv(map[string]string{
 		"DEBUG": "*",
 	})
 
 	registry := newRegistry()
-	libLogger := noopLogger()
+	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	register(registry, "com/lib", &libLogger)
+	register(registry, "com/lib", &pkgLogger)
 	applicationLogger(registry, env, "test", "com/test", &appLogger)
 
-	assertLevelEnabled(t, libLogger, zap.DebugLevel)
+	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
 	assertLevelEnabled(t, appLogger, zap.DebugLevel)
 }
 
@@ -115,16 +115,16 @@ func TestLogger_CustomizedNamePerLogger(t *testing.T) {
 	})
 
 	registry := newRegistry()
-	libLogger := noopLogger()
+	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
 	testingCore := newTestingCore()
 
-	libraryLogger(registry, "libName", "com/lib", &libLogger)
+	packageLogger(registry, "libName", "com/lib", &pkgLogger)
 	applicationLogger(registry, env, "appName", "com/test", &appLogger, withTestingCore(testingCore))
 
 	// Write log statements
-	libLogger.Info("lib")
+	pkgLogger.Info("lib")
 	appLogger.Info("app")
 
 	require.Len(t, testingCore.checkedEntries, 2)
