@@ -74,6 +74,23 @@ func TestAppAndPkgLogger(t *testing.T) {
 	assert.False(t, appTracer.Enabled())
 }
 
+func TestAppAndPkgLogger_SameShortNameStartsAllInInfo(t *testing.T) {
+	env := noEnv
+
+	registry := newRegistry()
+	pkgLogger := noopLogger()
+	appLogger := noopLogger()
+
+	pkgTracer := packageLogger(registry, "test", "com/lib", &pkgLogger)
+	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
+
+	assertLevelEnabled(t, pkgLogger, zap.InfoLevel)
+	assert.False(t, pkgTracer.Enabled())
+
+	assertLevelEnabled(t, appLogger, zap.InfoLevel)
+	assert.False(t, appTracer.Enabled())
+}
+
 func TestAppAndPkgLogger_DebugTrue(t *testing.T) {
 	env := fakeEnv(map[string]string{
 		"DEBUG": "*",

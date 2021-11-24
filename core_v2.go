@@ -170,8 +170,10 @@ func applicationLogger(
 
 	appEntry := registry.entriesByPackageID[packageID]
 	if *appEntry.logPtr != nil && *appEntry.logPtr == initialLogger {
-		// No environment override the default logger, let's force INFO to be used in this case
-		registry.setLoggerForEntry(appEntry, zapcore.InfoLevel, false, registry.factory)
+		// No environment override the default logger, let's force INFO to be used for all entries with the same shortName (usually a common project)
+		for _, entry := range registry.entriesByShortName[shortName] {
+			registry.setLoggerForEntry(entry, zapcore.InfoLevel, false, registry.factory)
+		}
 	}
 
 	appLogger := zap.NewNop()
