@@ -47,13 +47,25 @@ func init() {
 	} {
 		binary.Read(crand.Reader, binary.LittleEndian, p)
 	}
+
 	traceIDGenerator.traceIDRand = rand.New(rand.NewSource(rngSeed))
 	traceIDGenerator.spanIDInc |= 1
-
 }
 
-// Handler is an http.Handler wrapper to instrument your HTTP server with
-// an automatic `zap.Logger` per request (i.e. context).
+func NewAddTraceIDMiddleware(next http.Handler, rootLogger *zap.Logger, propagation propagation.HTTPFormat) *AddTraceIDMiddleware {
+	if rootLogger == nil {
+		panic("root logger must not be nil")
+	}
+
+	return &AddTraceIDMiddleware{
+		next:        next,
+		rootLogger:  rootLogger,
+		propagation: propagation,
+	}
+}
+
+// AddTraceIDMiddleware is an http.Handler wrapper to instrument your HTTP server with
+// an automatic `zap.Logger` per request (i.e. context) that is properly instrumented.
 //
 // Logging
 //
@@ -64,47 +76,49 @@ func init() {
 //
 // If the trace id cannot be extracted from the request, an random request id is
 // generated and used under the field `req_id`.
-type Handler struct {
+type AddTraceIDMiddleware struct {
 	// Handler is the handler used to handle the incoming request.
-	Next http.Handler
+	next http.Handler
 
 	// Propagation defines how traces are propagated. If unspecified,
 	// Stackdriver propagation will be used.
-	Propagation propagation.HTTPFormat
+	propagation propagation.HTTPFormat
 
 	// Actual root logger to instrument with request information
-	RootLogger *zap.Logger
+	rootLogger *zap.Logger
 }
 
-func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	spanContext, ok := h.extractSpanContext(r)
+func (h *AddTraceIDMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rootLogger := *h.rootLogger
+	spanContext, ok := extractSpanContext(r, h.propagation)
+
 	var logger *zap.Logger
 	if !ok {
 		// Not found in the header, check from the context directly than
 		span := trace.FromContext(r.Context())
 		if span == nil {
 			traceIDField := zap.Stringer("trace_id", traceIDGenerator.NewTraceID())
-			logger = h.RootLogger.With(traceIDField)
+			logger = rootLogger.With(traceIDField)
 		} else {
 			spanContext := span.SpanContext()
 			traceID := hex.EncodeToString(spanContext.TraceID[:])
-			logger = h.RootLogger.With(zap.String("trace_id", traceID))
+			logger = rootLogger.With(zap.String("trace_id", traceID))
 		}
 	} else {
 		traceID := hex.EncodeToString(spanContext.TraceID[:])
-		logger = h.RootLogger.With(zap.String("trace_id", traceID))
+		logger = rootLogger.With(zap.String("trace_id", traceID))
 	}
 
 	ctx := WithLogger(r.Context(), logger)
-	h.Next.ServeHTTP(w, r.WithContext(ctx))
+	h.next.ServeHTTP(w, r.WithContext(ctx))
 }
 
-func (h *Handler) extractSpanContext(r *http.Request) (trace.SpanContext, bool) {
-	if h.Propagation == nil {
+func extractSpanContext(r *http.Request, propagation propagation.HTTPFormat) (trace.SpanContext, bool) {
+	if propagation == nil {
 		return defaultFormat.SpanContextFromRequest(r)
 	}
 
-	return h.Propagation.SpanContextFromRequest(r)
+	return propagation.SpanContextFromRequest(r)
 }
 
 type defaultIDGenerator struct {
@@ -147,4 +161,54 @@ func (gen *defaultIDGenerator) NewTraceID() trace.TraceID {
 	binary.LittleEndian.PutUint64(tid[8:16], gen.traceIDRand.Uint64()+gen.traceIDAdd[1])
 	gen.Unlock()
 	return tid
+}
+
+// Deprecated: Handler has been replaced by AddTraceIDMiddleware, use
+// logging.NewAddTraceIDMiddleware to construct a new one.
+//
+// Handler is an http.Handler wrapper to instrument your HTTP server with
+// an automatic `zap.Logger` per request (i.e. context).
+//
+// Logging
+//
+// This handler is aware of the incoming request's trace id, reading it
+// from request headers as configured using the Propagation field. The extracted
+// trace id if present is used to configure the actual logger with the field
+// `trace_id`.
+//
+// If the trace id cannot be extracted from the request, an random request id is
+// generated and used under the field `req_id`.
+type Handler struct {
+	// Handler is the handler used to handle the incoming request.
+	Next http.Handler
+
+	// Propagation defines how traces are propagated. If unspecified,
+	// Stackdriver propagation will be used.
+	Propagation propagation.HTTPFormat
+
+	// Actual root logger to instrument with request information
+	RootLogger *zap.Logger
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	spanContext, ok := extractSpanContext(r, h.Propagation)
+	var logger *zap.Logger
+	if !ok {
+		// Not found in the header, check from the context directly than
+		span := trace.FromContext(r.Context())
+		if span == nil {
+			traceIDField := zap.Stringer("trace_id", traceIDGenerator.NewTraceID())
+			logger = h.RootLogger.With(traceIDField)
+		} else {
+			spanContext := span.SpanContext()
+			traceID := hex.EncodeToString(spanContext.TraceID[:])
+			logger = h.RootLogger.With(zap.String("trace_id", traceID))
+		}
+	} else {
+		traceID := hex.EncodeToString(spanContext.TraceID[:])
+		logger = h.RootLogger.With(zap.String("trace_id", traceID))
+	}
+
+	ctx := WithLogger(r.Context(), logger)
+	h.Next.ServeHTTP(w, r.WithContext(ctx))
 }
