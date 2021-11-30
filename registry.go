@@ -77,7 +77,7 @@ type registryEntry struct {
 	onUpdate     func(newLogger *zap.Logger)
 }
 
-var globalRegistry = newRegistry()
+var globalRegistry = newRegistry("global")
 var defaultLogger = zap.NewNop()
 
 func Register(packageID string, zlogPtr **zap.Logger, options ...RegisterOption) {
@@ -246,27 +246,33 @@ func setLogger(entry *registryEntry, logger *zap.Logger, tracing tracingType) {
 type registry struct {
 	sync.RWMutex
 
+	name               string
 	factory            loggerFactory
 	entriesByPackageID map[string]*registryEntry
 	entriesByShortName map[string][]*registryEntry
+
+	dbgLogger *zap.Logger
 }
 
-func newRegistry() *registry {
+func newRegistry(name string) *registry {
 	return &registry{
+		name:               name,
 		entriesByPackageID: make(map[string]*registryEntry),
 		entriesByShortName: make(map[string][]*registryEntry),
-		factory: func(name string, level zapcore.Level) *zap.Logger {
-			loggerOptions := newLoggerOptions("", WithAtomicLevel(zap.NewAtomicLevelAt(level)))
+		factory: func(name string, level zap.AtomicLevel) *zap.Logger {
+			loggerOptions := newLoggerOptions("", WithAtomicLevel(level))
 			if name != "" {
 				loggerOptions.loggerName = name
 			}
 
 			return newLogger(&loggerOptions)
 		},
+
+		dbgLogger: dbgZlog.With(zap.String("registry", name)),
 	}
 }
 
-func (r *registry) addEntry(entry *registryEntry) {
+func (r *registry) registerEntry(entry *registryEntry) {
 	if entry == nil {
 		panic("refusing to add a nil registry entry")
 	}
@@ -285,6 +291,8 @@ func (r *registry) addEntry(entry *registryEntry) {
 	if shortName != "" {
 		r.entriesByShortName[shortName] = append(r.entriesByShortName[shortName], entry)
 	}
+
+	r.dbgLogger.Info("registered entry", zap.String("short_name", shortName), zap.String("id", id))
 }
 
 func (r *registry) overrideFromSpec(spec *logLevelSpec, factory loggerFactory) {

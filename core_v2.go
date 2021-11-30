@@ -11,11 +11,18 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-type loggerFactory func(name string, level zapcore.Level) *zap.Logger
+var dbgZlog = zap.NewNop()
+var dbgRegistry = newRegistry("logging_dbg")
 
-// This v2 version of `core.go` is a work in progress without any backwar compatibility
+func init() {
+	register2(dbgRegistry, "logging", "github.com/streamingfast/logging", &dbgZlog)
+}
+
+type loggerFactory func(name string, level zap.AtomicLevel) *zap.Logger
+
+// This v2 version of `core.go` is a work in progress without any backward compatibility
 // version. It might not made it to an official version of the library so you can depend
-// at your own risk.
+// on it at your own risk.
 
 type loggerOptions struct {
 	encoderVerbosity         *int
@@ -144,6 +151,7 @@ func applicationLogger(
 	opts ...LoggerOption,
 ) Tracer {
 	loggerOptions := newLoggerOptions(shortName, opts...)
+	dbgZlog.Info("application logger invoked")
 	tracer := register2(registry, shortName, packageID, logger, loggerOptions.registerOptions...)
 
 	registry.factory = func(name string, level zapcore.Level) *zap.Logger {

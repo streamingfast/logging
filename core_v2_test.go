@@ -10,7 +10,7 @@ import (
 )
 
 func TestApplicationLoggerOnly(t *testing.T) {
-	registry := newRegistry()
+	registry := newRegistry("test")
 	logger := noopLogger()
 	tracer := applicationLogger(registry, noEnv, "test", "com/test", &logger)
 
@@ -23,7 +23,7 @@ func TestApplicationLoggerOnly_DebugTrue(t *testing.T) {
 		"DEBUG": "true",
 	})
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	logger := noopLogger()
 	tracer := applicationLogger(registry, env, "test", "com/test", &logger)
 
@@ -36,7 +36,7 @@ func TestApplicationLoggerOnly_DebugStart(t *testing.T) {
 		"DEBUG": "*",
 	})
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	logger := noopLogger()
 	tracer := applicationLogger(registry, env, "test", "com/test", &logger)
 
@@ -49,7 +49,7 @@ func TestApplicationLoggerOnly_TraceStart(t *testing.T) {
 		"TRACE": "*",
 	})
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	logger := noopLogger()
 	tracer := applicationLogger(registry, env, "test", "com/test", &logger)
 
@@ -60,7 +60,7 @@ func TestApplicationLoggerOnly_TraceStart(t *testing.T) {
 func TestAppAndPkgLogger(t *testing.T) {
 	env := noEnv
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
@@ -77,7 +77,7 @@ func TestAppAndPkgLogger(t *testing.T) {
 func TestAppAndPkgLogger_SameShortNameStartsAllInInfo(t *testing.T) {
 	env := noEnv
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
@@ -96,7 +96,7 @@ func TestAppAndPkgLogger_DebugTrue(t *testing.T) {
 		"DEBUG": "*",
 	})
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
@@ -115,7 +115,7 @@ func TestAppAndPkgLogger_PkgViaLegacyRegister(t *testing.T) {
 		"DEBUG": "*",
 	})
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
@@ -131,7 +131,7 @@ func TestLogger_CustomizedNamePerLogger(t *testing.T) {
 		"DEBUG": "*",
 	})
 
-	registry := newRegistry()
+	registry := newRegistry("test")
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
