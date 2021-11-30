@@ -154,7 +154,7 @@ func applicationLogger(
 	dbgZlog.Info("application logger invoked")
 	tracer := register2(registry, shortName, packageID, logger, loggerOptions.registerOptions...)
 
-	registry.factory = func(name string, level zapcore.Level) *zap.Logger {
+	registry.factory = func(name string, level zap.AtomicLevel) *zap.Logger {
 		clonedOptions := loggerOptions
 		if name != "" {
 			clonedOptions.loggerName = name
@@ -165,37 +165,48 @@ func applicationLogger(
 			return newLogger(&clonedOptions)
 		}
 
-		clonedOptions.level = ptrLevel(zap.NewAtomicLevelAt(level))
+		clonedOptions.level = ptrLevel(level)
 
 		return newLogger(&clonedOptions)
 	}
 
-	// We must keep the pointer because it could be moved in the override below
-	initialLogger := *logger
+	// We first initialize all logger to something at development panic (so writes
+	// development panics, panics and fatals).
+	//
+	// This ensure that all loggers are pre-created and as such, we are able to override
+	// the level of any of them (because we have created it).
+	registry.forAllEntries(func(entry *registryEntry) {
+		registry.setLoggerForEntry(entry, zapcore.DPanicLevel, false)
+	})
 
+	// We then override the level based on the spec extracted from the environment
+	appLoggerAffectedByEnv := false
 	logLevelSpec := newLogLevelSpec(envGet)
-	registry.overrideFromSpec(logLevelSpec, registry.factory)
+	registry.forAllEntriesMatchingSpec(logLevelSpec, func(entry *registryEntry, level zapcore.Level, trace bool) {
+		if entry.packageID == packageID {
+			appLoggerAffectedByEnv = true
+		}
 
-	appEntry := registry.entriesByPackageID[packageID]
-	if *appEntry.logPtr != nil && *appEntry.logPtr == initialLogger {
-		// No environment override the default logger, let's force INFO to be used for all entries with the same shortName (usually a common project)
+		registry.setLevelForEntry(entry, level, trace)
+	})
+
+	if !appLoggerAffectedByEnv {
+		// No environment affected the application logger, let's force INFO to be used for all entries with the same shortName (usually a common project)
 		for _, entry := range registry.entriesByShortName[shortName] {
-			registry.setLoggerForEntry(entry, zapcore.InfoLevel, false, registry.factory)
+			registry.setLevelForEntry(entry, zapcore.InfoLevel, false)
 		}
 	}
 
-	appLogger := zap.NewNop()
-	if *appEntry.logPtr != nil {
-		appLogger = *appEntry.logPtr
-	}
+	// The application logger is guaranteed to be set at this point, at worst it will only be active for >= DPanicLevel
+	appLogger := *registry.entriesByPackageID[packageID].logPtr
 
-	// Hijack standard Golang `log` and redirect it to our common logger
+	// Hijack standard Golang `log` and redirects it to our common logger
 	zap.RedirectStdLogAt(appLogger, zap.DebugLevel)
 
 	if loggerOptions.switcherServerAutoStart != nil && *loggerOptions.switcherServerAutoStart {
 		go func() {
 			listenAddr := loggerOptions.switcherServerListenAddr
-			appLogger.Debug("starting atomic level switcher", zap.String("listen_addr", listenAddr))
+			appLogger.Info("starting atomic level switcher", zap.String("listen_addr", listenAddr))
 
 			handler := &switcherServerHandler{registry: registry}
 			if err := http.ListenAndServe(listenAddr, handler); err != nil {

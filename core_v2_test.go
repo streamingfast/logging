@@ -1,6 +1,8 @@
 package logging
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -149,8 +151,31 @@ func TestLogger_CustomizedNamePerLogger(t *testing.T) {
 	assert.Equal(t, "appName", testingCore.at(1).LoggerName)
 }
 
+func TestLogger_SetLevelForEntry_Debug(t *testing.T) {
+	env := fakeEnv(map[string]string{})
+
+	registry := newRegistry("test")
+	pkgLogger := noopLogger()
+	appLogger := noopLogger()
+
+	packageLogger(registry, "libName", "com/lib", &pkgLogger)
+	applicationLogger(registry, env, "appName", "com/test", &appLogger)
+
+	overrideEnv := fakeEnv(map[string]string{
+		"DEBUG": "*",
+	})
+	registry.forAllEntriesMatchingSpec(newLogLevelSpec(overrideEnv), func(entry *registryEntry, level zapcore.Level, trace bool) {
+		registry.setLevelForEntry(entry, level, trace)
+	})
+
+	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
+	assertLevelEnabled(t, appLogger, zap.DebugLevel)
+}
+
 func assertLevelEnabled(t *testing.T, logger *zap.Logger, level zapcore.Level) {
 	t.Helper()
+
+	var assertions []string
 
 	shouldBeEnabled := false
 	for _, candidate := range []zapcore.Level{zapcore.DebugLevel, zapcore.InfoLevel, zapcore.WarnLevel, zapcore.ErrorLevel} {
@@ -159,10 +184,18 @@ func assertLevelEnabled(t *testing.T, logger *zap.Logger, level zapcore.Level) {
 		}
 
 		if shouldBeEnabled {
-			assert.NotNil(t, logger.Check(candidate, ""), "The logger should have level %s enabled but it was not", candidate)
+			if logger.Check(candidate, "") == nil {
+				assertions = append(assertions, fmt.Sprintf("The logger should have level %s enabled but it was not", candidate))
+			}
 		} else {
-			assert.Nil(t, logger.Check(candidate, ""), "The logger should have level %s disabled but it was not", candidate)
+			if logger.Check(candidate, "") != nil {
+				assertions = append(assertions, fmt.Sprintf("The logger should have level %s enabled but it was not", candidate))
+			}
 		}
+	}
+
+	if len(assertions) > 0 {
+		assert.Fail(t, strings.Join(assertions, "\n"))
 	}
 }
 

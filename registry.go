@@ -72,9 +72,24 @@ type LoggerExtender func(*zap.Logger) *zap.Logger
 type registryEntry struct {
 	packageID    string
 	shortName    string
+	atomicLevel  zap.AtomicLevel
 	traceEnabled *bool
 	logPtr       **zap.Logger
 	onUpdate     func(newLogger *zap.Logger)
+}
+
+func (e *registryEntry) String() string {
+	loggerPtr := "<nil>"
+	if e.logPtr != nil {
+		loggerPtr = fmt.Sprintf("%p", *e.logPtr)
+	}
+
+	traceEnabled := false
+	if e.traceEnabled != nil {
+		traceEnabled = *e.traceEnabled
+	}
+
+	return fmt.Sprintf("%s @ %s (level: %s, trace?: %t, ptr: %s)", e.shortName, e.packageID, e.atomicLevel.Level(), traceEnabled, loggerPtr)
 }
 
 var globalRegistry = newRegistry("global")
@@ -110,11 +125,12 @@ func register(registry *registry, packageID string, zlogPtr **zap.Logger, option
 		packageID:    packageID,
 		shortName:    config.shortName,
 		traceEnabled: config.isTraceEnabled,
+		atomicLevel:  zap.NewAtomicLevelAt(zapcore.ErrorLevel),
 		logPtr:       zlogPtr,
 		onUpdate:     config.onUpdate,
 	}
 
-	registry.addEntry(entry)
+	registry.registerEntry(entry)
 
 	logger := defaultLogger
 	if *zlogPtr != nil {
@@ -295,50 +311,56 @@ func (r *registry) registerEntry(entry *registryEntry) {
 	r.dbgLogger.Info("registered entry", zap.String("short_name", shortName), zap.String("id", id))
 }
 
-func (r *registry) overrideFromSpec(spec *logLevelSpec, factory loggerFactory) {
+func (r *registry) forAllEntries(callback func(entry *registryEntry)) {
+	for _, entry := range r.entriesByPackageID {
+		callback(entry)
+	}
+}
+
+func (r *registry) forAllEntriesMatchingSpec(spec *logLevelSpec, callback func(entry *registryEntry, level zapcore.Level, trace bool)) {
 	for _, specForKey := range spec.sortedSpecs() {
 		if specForKey.key == "true" || specForKey.key == "*" {
 			for _, entry := range r.entriesByPackageID {
-				r.setLoggerForEntry(entry, specForKey.level, specForKey.trace, factory)
+				callback(entry, specForKey.level, specForKey.trace)
 			}
 
 			continue
 		}
 
-		r.setLoggerFromSpec(specForKey, factory)
+		r.forEntriesMatchingSpec(specForKey, callback)
 	}
 }
 
-func (r *registry) setLoggerFromSpec(spec *levelSpec, factory loggerFactory) {
+func (r *registry) forEntriesMatchingSpec(spec *levelSpec, callback func(entry *registryEntry, level zapcore.Level, trace bool)) {
 	entries, found := r.entriesByShortName[spec.key]
 	if found {
 		for _, entry := range entries {
-			r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
+			callback(entry, spec.level, spec.trace)
 		}
 		return
 	}
 
 	entry, found := r.entriesByPackageID[spec.key]
 	if found {
-		r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
+		callback(entry, spec.level, spec.trace)
 		return
 	}
 
 	regex, err := regexp.Compile(spec.key)
 	for packageID, entry := range globalRegistry.entriesByPackageID {
 		if (err == nil && regex.MatchString(packageID)) || (err != nil && packageID == spec.key) {
-			r.setLoggerForEntry(entry, spec.level, spec.trace, factory)
+			callback(entry, spec.level, spec.trace)
 		}
 	}
 }
 
-func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, trace bool, factory loggerFactory) {
+func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, trace bool) {
 	if entry == nil {
 		return
 	}
 
-	logger := factory(entry.shortName, level)
-
+	entry.atomicLevel.SetLevel(level)
+	logger := r.factory(entry.shortName, entry.atomicLevel)
 	*entry.logPtr = logger
 
 	// It's possible for an entry to have no tracer registered, for example if the legacy
@@ -350,6 +372,24 @@ func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, 
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
 	}
+
+	r.dbgLogger.Info("set logger on entry", zap.Stringer("entry", entry), zap.Stringer("to_level", level), zap.Bool("trace_enabled", trace))
+}
+
+func (r *registry) setLevelForEntry(entry *registryEntry, level zapcore.Level, trace bool) {
+	if entry == nil {
+		return
+	}
+
+	entry.atomicLevel.SetLevel(level)
+
+	// It's possible for an entry to have no tracer registered, for example if the legacy
+	// register method is used. We must protect from this and not set anything.
+	if entry.traceEnabled != nil {
+		*entry.traceEnabled = trace
+	}
+
+	r.dbgLogger.Info("set level on entry", zap.Stringer("entry", entry))
 }
 
 func validateEntryIdentifier(tag string, rawInput string, allowEmpty bool) string {

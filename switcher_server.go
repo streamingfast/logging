@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"go.uber.org/zap/zapcore"
 )
 
 type logChangeReq struct {
@@ -41,7 +43,9 @@ func (h *switcherServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		strings.ToUpper(in.Level): in.Inputs,
 	})
 
-	globalRegistry.overrideFromSpec(spec, globalRegistry.factory)
+	globalRegistry.forAllEntriesMatchingSpec(spec, func(entry *registryEntry, level zapcore.Level, trace bool) {
+		globalRegistry.setLevelForEntry(entry, level, trace)
+	})
 
 	w.Write([]byte("ok"))
 }
