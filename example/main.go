@@ -13,7 +13,7 @@ import (
 )
 
 var zlog = zap.NewNop()
-var tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example", &zlog,
+var tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example", zlog,
 	// By default active only when a production environment is detected (e.g. when file '/.dockerenv' file exists).
 	// But for the sake of the example here, with forcecully activate it.
 	logging.WithSwitcherServerAutoStart(),

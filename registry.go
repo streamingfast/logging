@@ -17,6 +17,7 @@ package logging
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -74,14 +75,14 @@ type registryEntry struct {
 	shortName    string
 	atomicLevel  zap.AtomicLevel
 	traceEnabled *bool
-	logPtr       **zap.Logger
+	logPtr       *zap.Logger
 	onUpdate     func(newLogger *zap.Logger)
 }
 
 func (e *registryEntry) String() string {
 	loggerPtr := "<nil>"
 	if e.logPtr != nil {
-		loggerPtr = fmt.Sprintf("%p", *e.logPtr)
+		loggerPtr = fmt.Sprintf("%p", e.logPtr)
 	}
 
 	traceEnabled := false
@@ -95,11 +96,18 @@ func (e *registryEntry) String() string {
 var globalRegistry = newRegistry("global")
 var defaultLogger = zap.NewNop()
 
+// Deprecated: will be replaced by RegisterLogger
 func Register(packageID string, zlogPtr **zap.Logger, options ...RegisterOption) {
+	if *zlogPtr == nil {
+		*zlogPtr = zap.NewNop()
+	}
+	register(globalRegistry, packageID, *zlogPtr, options...)
+}
+func RegisterLogger(packageID string, zlogPtr *zap.Logger, options ...RegisterOption) {
 	register(globalRegistry, packageID, zlogPtr, options...)
 }
 
-func register2(registry *registry, shortName string, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) Tracer {
+func register2(registry *registry, shortName string, packageID string, zlogPtr *zap.Logger, options ...RegisterOption) Tracer {
 	tracer := boolTracer{new(bool)}
 
 	allOptions := append([]RegisterOption{
@@ -111,7 +119,7 @@ func register2(registry *registry, shortName string, packageID string, zlogPtr *
 	return tracer
 }
 
-func register(registry *registry, packageID string, zlogPtr **zap.Logger, options ...RegisterOption) {
+func register(registry *registry, packageID string, zlogPtr *zap.Logger, options ...RegisterOption) {
 	if zlogPtr == nil {
 		panic("the zlog pointer (of type **zap.Logger) must be set")
 	}
@@ -133,8 +141,8 @@ func register(registry *registry, packageID string, zlogPtr **zap.Logger, option
 	registry.registerEntry(entry)
 
 	logger := defaultLogger
-	if *zlogPtr != nil {
-		logger = *zlogPtr
+	if zlogPtr != nil {
+		logger = zlogPtr
 	}
 
 	// The tracing has already been set, so we can go unspecified here to not change anything
@@ -169,16 +177,16 @@ func Extend(extender LoggerExtender, regexps ...string) {
 
 func extend(extender LoggerExtender, tracing tracingType, regexps ...string) {
 	for name, entry := range globalRegistry.entriesByPackageID {
-		if *entry.logPtr == nil {
+		if entry.logPtr == nil {
 			continue
 		}
 
 		if len(regexps) == 0 {
-			setLogger(entry, extender(*entry.logPtr), tracing)
+			setLogger(entry, extender(entry.logPtr), tracing)
 		} else {
 			for _, re := range regexps {
 				if regexp.MustCompile(re).MatchString(name) {
-					setLogger(entry, extender(*entry.logPtr), tracing)
+					setLogger(entry, extender(entry.logPtr), tracing)
 				}
 			}
 		}
@@ -244,7 +252,9 @@ func setLogger(entry *registryEntry, logger *zap.Logger, tracing tracingType) {
 		return
 	}
 
-	*entry.logPtr = logger
+	ve := reflect.ValueOf(entry.logPtr).Elem()
+	ve.Set(reflect.ValueOf(logger).Elem())
+
 	if entry.traceEnabled != nil && tracing != unspecifiedTracing {
 		switch tracing {
 		case enableTracing:
@@ -361,7 +371,9 @@ func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, 
 
 	entry.atomicLevel.SetLevel(level)
 	logger := r.factory(entry.shortName, entry.atomicLevel)
-	*entry.logPtr = logger
+
+	ve := reflect.ValueOf(entry.logPtr).Elem()
+	ve.Set(reflect.ValueOf(logger).Elem())
 
 	// It's possible for an entry to have no tracer registered, for example if the legacy
 	// register method is used. We must protect from this and not set anything.

@@ -14,7 +14,7 @@ import (
 func TestApplicationLoggerOnly(t *testing.T) {
 	registry := newRegistry("test")
 	logger := noopLogger()
-	tracer := applicationLogger(registry, noEnv, "test", "com/test", &logger)
+	tracer := applicationLogger(registry, noEnv, "test", "com/test", logger)
 
 	assertLevelEnabled(t, logger, zap.InfoLevel)
 	assert.False(t, tracer.Enabled())
@@ -27,7 +27,7 @@ func TestApplicationLoggerOnly_DebugTrue(t *testing.T) {
 
 	registry := newRegistry("test")
 	logger := noopLogger()
-	tracer := applicationLogger(registry, env, "test", "com/test", &logger)
+	tracer := applicationLogger(registry, env, "test", "com/test", logger)
 
 	assertLevelEnabled(t, logger, zap.DebugLevel)
 	assert.False(t, tracer.Enabled())
@@ -40,7 +40,7 @@ func TestApplicationLoggerOnly_DebugStart(t *testing.T) {
 
 	registry := newRegistry("test")
 	logger := noopLogger()
-	tracer := applicationLogger(registry, env, "test", "com/test", &logger)
+	tracer := applicationLogger(registry, env, "test", "com/test", logger)
 
 	assertLevelEnabled(t, logger, zap.DebugLevel)
 	assert.False(t, tracer.Enabled())
@@ -53,7 +53,7 @@ func TestApplicationLoggerOnly_TraceStart(t *testing.T) {
 
 	registry := newRegistry("test")
 	logger := noopLogger()
-	tracer := applicationLogger(registry, env, "test", "com/test", &logger)
+	tracer := applicationLogger(registry, env, "test", "com/test", logger)
 
 	assertLevelEnabled(t, logger, zap.DebugLevel)
 	assert.True(t, tracer.Enabled())
@@ -66,8 +66,8 @@ func TestAppAndPkgLogger(t *testing.T) {
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	pkgTracer := packageLogger(registry, "lib", "com/lib", &pkgLogger)
-	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
+	pkgTracer := packageLogger(registry, "lib", "com/lib", pkgLogger)
+	appTracer := applicationLogger(registry, env, "test", "com/test", appLogger)
 
 	assertLevelEnabled(t, pkgLogger, zap.PanicLevel)
 	assert.False(t, pkgTracer.Enabled())
@@ -83,8 +83,8 @@ func TestAppAndPkgLogger_SameShortNameStartsAllInInfo(t *testing.T) {
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	pkgTracer := packageLogger(registry, "test", "com/lib", &pkgLogger)
-	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
+	pkgTracer := packageLogger(registry, "test", "com/lib", pkgLogger)
+	appTracer := applicationLogger(registry, env, "test", "com/test", appLogger)
 
 	assertLevelEnabled(t, pkgLogger, zap.InfoLevel)
 	assert.False(t, pkgTracer.Enabled())
@@ -102,8 +102,8 @@ func TestAppAndPkgLogger_DebugTrue(t *testing.T) {
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	pkgTracer := packageLogger(registry, "lib", "com/lib", &pkgLogger)
-	appTracer := applicationLogger(registry, env, "test", "com/test", &appLogger)
+	pkgTracer := packageLogger(registry, "lib", "com/lib", pkgLogger)
+	appTracer := applicationLogger(registry, env, "test", "com/test", appLogger)
 
 	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
 	assert.False(t, pkgTracer.Enabled())
@@ -121,8 +121,8 @@ func TestAppAndPkgLogger_PkgViaLegacyRegister(t *testing.T) {
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	register(registry, "com/lib", &pkgLogger)
-	applicationLogger(registry, env, "test", "com/test", &appLogger)
+	register(registry, "com/lib", pkgLogger)
+	applicationLogger(registry, env, "test", "com/test", appLogger)
 
 	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
 	assertLevelEnabled(t, appLogger, zap.DebugLevel)
@@ -139,8 +139,8 @@ func TestLogger_CustomizedNamePerLogger(t *testing.T) {
 
 	testingCore := newTestingCore()
 
-	packageLogger(registry, "libName", "com/lib", &pkgLogger)
-	applicationLogger(registry, env, "appName", "com/test", &appLogger, withTestingCore(testingCore))
+	packageLogger(registry, "libName", "com/lib", pkgLogger)
+	applicationLogger(registry, env, "appName", "com/test", appLogger, withTestingCore(testingCore))
 
 	// Write log statements
 	pkgLogger.Info("lib")
@@ -158,8 +158,8 @@ func TestLogger_SetLevelForEntry_Debug(t *testing.T) {
 	pkgLogger := noopLogger()
 	appLogger := noopLogger()
 
-	packageLogger(registry, "libName", "com/lib", &pkgLogger)
-	applicationLogger(registry, env, "appName", "com/test", &appLogger)
+	packageLogger(registry, "libName", "com/lib", pkgLogger)
+	applicationLogger(registry, env, "appName", "com/test", appLogger)
 
 	overrideEnv := fakeEnv(map[string]string{
 		"DEBUG": "*",

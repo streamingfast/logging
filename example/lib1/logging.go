@@ -9,4 +9,4 @@ import (
 // Since it's a different project, we use a completely new "shortName" value for the
 // `PackageLogger` invocation.
 var zlog = zap.NewNop()
-var tracer = logging.PackageLogger("lib", "github.com/streamingfast/lib", &zlog)
+var tracer = logging.PackageLogger("lib", "github.com/streamingfast/lib", zlog)

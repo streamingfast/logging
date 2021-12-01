@@ -15,7 +15,7 @@ var dbgZlog = zap.NewNop()
 var dbgRegistry = newRegistry("logging_dbg")
 
 func init() {
-	register2(dbgRegistry, "logging", "github.com/streamingfast/logging", &dbgZlog)
+	register2(dbgRegistry, "logging", "github.com/streamingfast/logging", dbgZlog)
 }
 
 type loggerFactory func(name string, level zap.AtomicLevel) *zap.Logger
@@ -110,16 +110,22 @@ func WithOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
 // code.
 //
 // You should used this in packages that are not `main` packages
-func PackageLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+func PackageLogger(shortName string, packageID string, logger *zap.Logger, registerOptions ...RegisterOption) Tracer {
 	return packageLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
 }
 
 // Deprecated: Use PackageLogger instead, scheduled for removal, time frame undefined for now
 func LibraryLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+	if *logger == nil {
+		*logger = zap.NewNop()
+	}
+	return packageLogger(globalRegistry, shortName, packageID, *logger, registerOptions...)
+}
+func LibraryLoggerBilc(shortName string, packageID string, logger *zap.Logger, registerOptions ...RegisterOption) Tracer {
 	return packageLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
 }
 
-func packageLogger(registry *registry, shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
+func packageLogger(registry *registry, shortName string, packageID string, logger *zap.Logger, registerOptions ...RegisterOption) Tracer {
 	return register2(registry, shortName, packageID, logger, registerOptions...)
 }
 
@@ -138,7 +144,7 @@ func packageLogger(registry *registry, shortName string, packageID string, logge
 //
 // *Note* The ApplicationLogger should be start only once per processed. That could be enforced
 //        in the future.
-func ApplicationLogger(shortName string, packageID string, logger **zap.Logger, opts ...LoggerOption) Tracer {
+func ApplicationLogger(shortName string, packageID string, logger *zap.Logger, opts ...LoggerOption) Tracer {
 	return applicationLogger(globalRegistry, os.Getenv, shortName, packageID, logger, opts...)
 }
 
@@ -147,7 +153,7 @@ func applicationLogger(
 	envGet func(string) string,
 	shortName string,
 	packageID string,
-	logger **zap.Logger,
+	logger *zap.Logger,
 	opts ...LoggerOption,
 ) Tracer {
 	loggerOptions := newLoggerOptions(shortName, opts...)
@@ -198,7 +204,7 @@ func applicationLogger(
 	}
 
 	// The application logger is guaranteed to be set at this point, at worst it will only be active for >= DPanicLevel
-	appLogger := *registry.entriesByPackageID[packageID].logPtr
+	appLogger := registry.entriesByPackageID[packageID].logPtr
 
 	// Hijack standard Golang `log` and redirects it to our common logger
 	zap.RedirectStdLogAt(appLogger, zap.DebugLevel)

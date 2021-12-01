@@ -6,4 +6,4 @@ import (
 )
 
 var zlog = zap.NewNop()
-var tracer = logging.PackageLogger("example", "github.com/streamingfast/example/logging/pkg2", &zlog)
+var tracer = logging.PackageLogger("example", "github.com/streamingfast/example/logging/pkg2", zlog)
