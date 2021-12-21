@@ -34,6 +34,7 @@ type loggerOptions struct {
 	zapOptions               []zap.Option
 	registerOptions          []RegisterOption
 
+	forceProductionLogger bool
 	// Use internally only, no With... value defined for it
 	loggerName string
 }
@@ -96,6 +97,12 @@ func WithServiceName(name string) LoggerOption {
 func WithZapOption(zapOption zap.Option) LoggerOption {
 	return loggerFuncOption(func(o *loggerOptions) {
 		o.zapOptions = append(o.zapOptions, zapOption)
+	})
+}
+
+func WithProductionLogger() LoggerOption {
+	return loggerFuncOption(func(o *loggerOptions) {
+		o.forceProductionLogger = true
 	})
 }
 
@@ -261,7 +268,7 @@ func maybeNewLogger(opts *loggerOptions) (logger *zap.Logger, err error) {
 
 	zapOptions := opts.zapOptions
 
-	if isProductionEnvironment() {
+	if isProductionEnvironment() || opts.forceProductionLogger {
 		reportAllErrors := opts.reportAllErrors != nil
 		serviceName := opts.serviceName
 
