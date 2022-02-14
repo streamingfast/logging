@@ -53,7 +53,7 @@ func newLoggerOptions(shortName string, opts ...LoggerOption) loggerOptions {
 		WithServiceName(shortName).apply(&loggerOptions)
 	}
 
-	if loggerOptions.switcherServerAutoStart == nil && isProductionEnvironment() {
+	if loggerOptions.switcherServerAutoStart == nil && loggerOptions.isProductionEnvironment() {
 		WithSwitcherServerAutoStart().apply(&loggerOptions)
 	}
 
@@ -110,6 +110,16 @@ func WithOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
 	return loggerFuncOption(func(o *loggerOptions) {
 		o.registerOptions = append(o.registerOptions, RegisterOnUpdate(onUpdate))
 	})
+}
+
+func (o *loggerOptions) isProductionEnvironment() bool {
+	if o.forceProductionLogger {
+		return true
+	}
+
+	_, err := os.Stat("/.dockerenv")
+
+	return !os.IsNotExist(err)
 }
 
 // PackageLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
@@ -222,12 +232,12 @@ func applicationLogger(
 // NewLogger creates a new logger with sane defaults based on a varity of rules described
 // below and automatically registered withing the logging registry.
 func NewLogger(opts ...LoggerOption) *zap.Logger {
-	logger, err := MaybeNewLogger(opts...)
-	if err != nil {
-		panic(fmt.Errorf("unable to create logger (in production? %t): %w", isProductionEnvironment(), err))
+	options := loggerOptions{}
+	for _, opt := range opts {
+		opt.apply(&options)
 	}
 
-	return logger
+	return newLogger(&options)
 }
 
 func MaybeNewLogger(opts ...LoggerOption) (*zap.Logger, error) {
@@ -247,7 +257,7 @@ func MaybeNewLogger(opts ...LoggerOption) (*zap.Logger, error) {
 func newLogger(opts *loggerOptions) *zap.Logger {
 	logger, err := maybeNewLogger(opts)
 	if err != nil {
-		panic(fmt.Errorf("unable to create logger (in production? %t): %w", isProductionEnvironment(), err))
+		panic(fmt.Errorf("unable to create logger (in production? %t): %w", opts.isProductionEnvironment(), err))
 	}
 
 	return logger
@@ -262,7 +272,7 @@ func maybeNewLogger(opts *loggerOptions) (logger *zap.Logger, err error) {
 
 	zapOptions := opts.zapOptions
 
-	if isProductionEnvironment() || opts.forceProductionLogger {
+	if opts.isProductionEnvironment() || opts.forceProductionLogger {
 		reportAllErrors := opts.reportAllErrors != nil
 		serviceName := opts.serviceName
 
@@ -289,12 +299,6 @@ func maybeNewLogger(opts *loggerOptions) (logger *zap.Logger, err error) {
 	}
 
 	return zap.New(zapcore.NewCore(NewEncoder(verbosity, isTTY), logStdoutWriter, opts.level), zapOptions...), nil
-}
-
-func isProductionEnvironment() bool {
-	_, err := os.Stat("/.dockerenv")
-
-	return !os.IsNotExist(err)
 }
 
 type Tracer interface {
