@@ -13,8 +13,7 @@ import (
 
 func TestApplicationLoggerOnly(t *testing.T) {
 	registry := newRegistry("test")
-	logger := noopLogger()
-	tracer := applicationLogger(registry, noEnv, "test", "com/test", logger)
+	logger, tracer := applicationLogger(registry, noEnv, "test", "com/test")
 
 	assertLevelEnabled(t, logger, zap.InfoLevel)
 	assert.False(t, tracer.Enabled())
@@ -26,8 +25,7 @@ func TestApplicationLoggerOnly_DebugTrue(t *testing.T) {
 	})
 
 	registry := newRegistry("test")
-	logger := noopLogger()
-	tracer := applicationLogger(registry, env, "test", "com/test", logger)
+	logger, tracer := applicationLogger(registry, env, "test", "com/test")
 
 	assertLevelEnabled(t, logger, zap.DebugLevel)
 	assert.False(t, tracer.Enabled())
@@ -39,8 +37,7 @@ func TestApplicationLoggerOnly_DebugStart(t *testing.T) {
 	})
 
 	registry := newRegistry("test")
-	logger := noopLogger()
-	tracer := applicationLogger(registry, env, "test", "com/test", logger)
+	logger, tracer := applicationLogger(registry, env, "test", "com/test")
 
 	assertLevelEnabled(t, logger, zap.DebugLevel)
 	assert.False(t, tracer.Enabled())
@@ -52,8 +49,7 @@ func TestApplicationLoggerOnly_TraceStart(t *testing.T) {
 	})
 
 	registry := newRegistry("test")
-	logger := noopLogger()
-	tracer := applicationLogger(registry, env, "test", "com/test", logger)
+	logger, tracer := applicationLogger(registry, env, "test", "com/test")
 
 	assertLevelEnabled(t, logger, zap.DebugLevel)
 	assert.True(t, tracer.Enabled())
@@ -63,13 +59,11 @@ func TestAppAndPkgLogger(t *testing.T) {
 	env := noEnv
 
 	registry := newRegistry("test")
-	pkgLogger := noopLogger()
-	appLogger := noopLogger()
 
-	pkgTracer := packageLogger(registry, "lib", "com/lib", pkgLogger)
-	appTracer := applicationLogger(registry, env, "test", "com/test", appLogger)
+	pkgLogger, pkgTracer := packageLogger(registry, "lib", "com/lib")
+	appLogger, appTracer := applicationLogger(registry, env, "test", "com/test")
 
-	assertLevelEnabled(t, pkgLogger, zap.PanicLevel)
+	assertLevelEnabled(t, pkgLogger, zap.ErrorLevel)
 	assert.False(t, pkgTracer.Enabled())
 
 	assertLevelEnabled(t, appLogger, zap.InfoLevel)
@@ -80,11 +74,8 @@ func TestAppAndPkgLogger_SameShortNameStartsAllInInfo(t *testing.T) {
 	env := noEnv
 
 	registry := newRegistry("test")
-	pkgLogger := noopLogger()
-	appLogger := noopLogger()
-
-	pkgTracer := packageLogger(registry, "test", "com/lib", pkgLogger)
-	appTracer := applicationLogger(registry, env, "test", "com/test", appLogger)
+	pkgLogger, pkgTracer := packageLogger(registry, "test", "com/lib")
+	appLogger, appTracer := applicationLogger(registry, env, "test", "com/test")
 
 	assertLevelEnabled(t, pkgLogger, zap.InfoLevel)
 	assert.False(t, pkgTracer.Enabled())
@@ -99,11 +90,40 @@ func TestAppAndPkgLogger_DebugTrue(t *testing.T) {
 	})
 
 	registry := newRegistry("test")
-	pkgLogger := noopLogger()
-	appLogger := noopLogger()
+	pkgLogger, pkgTracer := packageLogger(registry, "lib", "com/lib")
+	appLogger, appTracer := applicationLogger(registry, env, "test", "com/test")
 
-	pkgTracer := packageLogger(registry, "lib", "com/lib", pkgLogger)
-	appTracer := applicationLogger(registry, env, "test", "com/test", appLogger)
+	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
+	assert.False(t, pkgTracer.Enabled())
+
+	assertLevelEnabled(t, appLogger, zap.DebugLevel)
+	assert.False(t, appTracer.Enabled())
+}
+
+func TestAppAndPkgLogger_DebugSpecificPackage(t *testing.T) {
+	env := fakeEnv(map[string]string{
+		"DEBUG": "com/test",
+	})
+
+	registry := newRegistry("test")
+	pkgLogger, pkgTracer := packageLogger(registry, "lib", "com/lib")
+	appLogger, appTracer := applicationLogger(registry, env, "test", "com/test")
+
+	assertLevelEnabled(t, pkgLogger, zap.ErrorLevel)
+	assert.False(t, pkgTracer.Enabled())
+
+	assertLevelEnabled(t, appLogger, zap.DebugLevel)
+	assert.False(t, appTracer.Enabled())
+}
+
+func TestAppAndPkgLogger_DebugSpecificPackageRegex(t *testing.T) {
+	env := fakeEnv(map[string]string{
+		"DEBUG": "com/(test|lib)",
+	})
+
+	registry := newRegistry("test")
+	pkgLogger, pkgTracer := packageLogger(registry, "lib", "com/lib")
+	appLogger, appTracer := applicationLogger(registry, env, "test", "com/test")
 
 	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
 	assert.False(t, pkgTracer.Enabled())
@@ -118,11 +138,10 @@ func TestAppAndPkgLogger_PkgViaLegacyRegister(t *testing.T) {
 	})
 
 	registry := newRegistry("test")
-	pkgLogger := noopLogger()
-	appLogger := noopLogger()
+	pkgLogger := zap.NewNop()
 
 	register(registry, "com/lib", pkgLogger)
-	applicationLogger(registry, env, "test", "com/test", appLogger)
+	appLogger, _ := applicationLogger(registry, env, "test", "com/test")
 
 	assertLevelEnabled(t, pkgLogger, zap.DebugLevel)
 	assertLevelEnabled(t, appLogger, zap.DebugLevel)
@@ -134,13 +153,10 @@ func TestLogger_CustomizedNamePerLogger(t *testing.T) {
 	})
 
 	registry := newRegistry("test")
-	pkgLogger := noopLogger()
-	appLogger := noopLogger()
-
 	testingCore := newTestingCore()
 
-	packageLogger(registry, "libName", "com/lib", pkgLogger)
-	applicationLogger(registry, env, "appName", "com/test", appLogger, withTestingCore(testingCore))
+	pkgLogger, _ := packageLogger(registry, "libName", "com/lib")
+	appLogger, _ := applicationLogger(registry, env, "appName", "com/test", withTestingCore(testingCore))
 
 	// Write log statements
 	pkgLogger.Info("lib")
@@ -155,11 +171,8 @@ func TestLogger_SetLevelForEntry_Debug(t *testing.T) {
 	env := fakeEnv(map[string]string{})
 
 	registry := newRegistry("test")
-	pkgLogger := noopLogger()
-	appLogger := noopLogger()
-
-	packageLogger(registry, "libName", "com/lib", pkgLogger)
-	applicationLogger(registry, env, "appName", "com/test", appLogger)
+	pkgLogger, _ := packageLogger(registry, "libName", "com/lib")
+	appLogger, _ := applicationLogger(registry, env, "appName", "com/test")
 
 	overrideEnv := fakeEnv(map[string]string{
 		"DEBUG": "*",
@@ -205,10 +218,6 @@ var fakeEnv = func(in map[string]string) func(string) string {
 	return func(s string) string {
 		return in[s]
 	}
-}
-
-func noopLogger() *zap.Logger {
-	return zap.NewNop()
 }
 
 type testingCore struct {

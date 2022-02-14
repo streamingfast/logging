@@ -103,11 +103,13 @@ func Register(packageID string, zlogPtr **zap.Logger, options ...RegisterOption)
 	}
 	register(globalRegistry, packageID, *zlogPtr, options...)
 }
+
 func RegisterLogger(packageID string, zlogPtr *zap.Logger, options ...RegisterOption) {
 	register(globalRegistry, packageID, zlogPtr, options...)
 }
 
-func register2(registry *registry, shortName string, packageID string, zlogPtr *zap.Logger, options ...RegisterOption) Tracer {
+func register2(registry *registry, shortName string, packageID string, options ...RegisterOption) (*zap.Logger, Tracer) {
+	logger := zap.NewNop()
 	tracer := boolTracer{new(bool)}
 
 	allOptions := append([]RegisterOption{
@@ -115,8 +117,22 @@ func register2(registry *registry, shortName string, packageID string, zlogPtr *
 		registerWithTracer(tracer.value),
 	}, options...)
 
-	register(registry, packageID, zlogPtr, allOptions...)
-	return tracer
+	register(registry, packageID, logger, allOptions...)
+
+	return logger, tracer
+}
+
+func registerDebug(registry *registry, shortName string, packageID string, logger *zap.Logger, options ...RegisterOption) (*zap.Logger, Tracer) {
+	tracer := boolTracer{new(bool)}
+
+	allOptions := append([]RegisterOption{
+		registerShortName(shortName),
+		registerWithTracer(tracer.value),
+	}, options...)
+
+	register(registry, packageID, logger, allOptions...)
+
+	return logger, tracer
 }
 
 func register(registry *registry, packageID string, zlogPtr *zap.Logger, options ...RegisterOption) {
@@ -342,23 +358,33 @@ func (r *registry) forAllEntriesMatchingSpec(spec *logLevelSpec, callback func(e
 }
 
 func (r *registry) forEntriesMatchingSpec(spec *levelSpec, callback func(entry *registryEntry, level zapcore.Level, trace bool)) {
+	r.dbgLogger.Debug("looking in short names to find spec key", zap.String("key", spec.key))
 	entries, found := r.entriesByShortName[spec.key]
 	if found {
+		r.dbgLogger.Debug("found logger in short names", zap.Int("count", len(entries)))
 		for _, entry := range entries {
 			callback(entry, spec.level, spec.trace)
 		}
 		return
 	}
 
+	r.dbgLogger.Debug("looking in package IDs to find spec key", zap.String("key", spec.key))
 	entry, found := r.entriesByPackageID[spec.key]
 	if found {
+		r.dbgLogger.Debug("found logger in package ID", zap.Stringer("entry", entry))
 		callback(entry, spec.level, spec.trace)
 		return
 	}
 
+	r.dbgLogger.Debug("looking in package IDs by regex", zap.String("key", spec.key))
 	regex, err := regexp.Compile(spec.key)
-	for packageID, entry := range globalRegistry.entriesByPackageID {
-		if (err == nil && regex.MatchString(packageID)) || (err != nil && packageID == spec.key) {
+	if err != nil {
+		r.dbgLogger.Debug("spec key is not a regex, we already matched exact package ID, nothing to do more", zap.Error(err))
+		return
+	}
+
+	for packageID, entry := range r.entriesByPackageID {
+		if regex.MatchString(packageID) {
 			callback(entry, spec.level, spec.trace)
 		}
 	}

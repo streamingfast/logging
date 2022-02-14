@@ -8,12 +8,9 @@ import (
 	"github.com/streamingfast/logging/example/lib1"
 	"github.com/streamingfast/logging/example/pkg1"
 	"github.com/streamingfast/logging/example/pkg2"
-
-	"go.uber.org/zap"
 )
 
-var zlog = zap.NewNop()
-var tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example", zlog,
+var zlog, tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example",
 	// By default active only when a production environment is detected (e.g. when file '/.dockerenv' file exists).
 	// But for the sake of the example here, with forcecully activate it.
 	logging.WithSwitcherServerAutoStart(),
@@ -43,7 +40,7 @@ func main() {
 	fmt.Println("The automatic level switcher is active in this demo, you can use it to")
 	fmt.Println("change level on the fly.")
 	fmt.Println("")
-	fmt.Println(`  curl -d '{"inputs":"example","level":"debug"}' http://locahost:1065`)
+	fmt.Println(`  curl -d '{"inputs":"example","level":"debug"}' http://localhost:1065`)
 	fmt.Println("")
 	fmt.Println("Accepted 'inputs' is the same as the environment variable above.")
 
