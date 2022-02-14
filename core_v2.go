@@ -15,7 +15,7 @@ var dbgZlog = zap.NewNop()
 var dbgRegistry = newRegistry("logging_dbg")
 
 func init() {
-	register2(dbgRegistry, "logging", "github.com/streamingfast/logging", &dbgZlog)
+	registerDebug(dbgRegistry, "logging", "github.com/streamingfast/logging", dbgZlog)
 }
 
 type loggerFactory func(name string, level zap.AtomicLevel) *zap.Logger
@@ -117,17 +117,12 @@ func WithOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
 // code.
 //
 // You should used this in packages that are not `main` packages
-func PackageLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
-	return packageLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
+func PackageLogger(shortName string, packageID string, registerOptions ...RegisterOption) (*zap.Logger, Tracer) {
+	return packageLogger(globalRegistry, shortName, packageID, registerOptions...)
 }
 
-// Deprecated: Use PackageLogger instead, scheduled for removal, time frame undefined for now
-func LibraryLogger(shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
-	return packageLogger(globalRegistry, shortName, packageID, logger, registerOptions...)
-}
-
-func packageLogger(registry *registry, shortName string, packageID string, logger **zap.Logger, registerOptions ...RegisterOption) Tracer {
-	return register2(registry, shortName, packageID, logger, registerOptions...)
+func packageLogger(registry *registry, shortName string, packageID string, registerOptions ...RegisterOption) (*zap.Logger, Tracer) {
+	return register2(registry, shortName, packageID, registerOptions...)
 }
 
 // ApplicationLogger should be used to get a logger for a top-level binary application which will
@@ -145,8 +140,8 @@ func packageLogger(registry *registry, shortName string, packageID string, logge
 //
 // *Note* The ApplicationLogger should be start only once per processed. That could be enforced
 //        in the future.
-func ApplicationLogger(shortName string, packageID string, logger **zap.Logger, opts ...LoggerOption) Tracer {
-	return applicationLogger(globalRegistry, os.Getenv, shortName, packageID, logger, opts...)
+func ApplicationLogger(shortName string, packageID string, opts ...LoggerOption) (*zap.Logger, Tracer) {
+	return applicationLogger(globalRegistry, os.Getenv, shortName, packageID, opts...)
 }
 
 func applicationLogger(
@@ -154,12 +149,11 @@ func applicationLogger(
 	envGet func(string) string,
 	shortName string,
 	packageID string,
-	logger **zap.Logger,
 	opts ...LoggerOption,
-) Tracer {
+) (*zap.Logger, Tracer) {
 	loggerOptions := newLoggerOptions(shortName, opts...)
 	dbgZlog.Info("application logger invoked")
-	tracer := register2(registry, shortName, packageID, logger, loggerOptions.registerOptions...)
+	logger, tracer := register2(registry, shortName, packageID, loggerOptions.registerOptions...)
 
 	registry.factory = func(name string, level zap.AtomicLevel) *zap.Logger {
 		clonedOptions := loggerOptions
@@ -183,7 +177,7 @@ func applicationLogger(
 	// This ensure that all loggers are pre-created and as such, we are able to override
 	// the level of any of them (because we have created it).
 	registry.forAllEntries(func(entry *registryEntry) {
-		registry.setLoggerForEntry(entry, zapcore.DPanicLevel, false)
+		registry.setLoggerForEntry(entry, zapcore.ErrorLevel, false)
 	})
 
 	// We then override the level based on the spec extracted from the environment
@@ -205,7 +199,7 @@ func applicationLogger(
 	}
 
 	// The application logger is guaranteed to be set at this point, at worst it will only be active for >= DPanicLevel
-	appLogger := *registry.entriesByPackageID[packageID].logPtr
+	appLogger := registry.entriesByPackageID[packageID].logPtr
 
 	// Hijack standard Golang `log` and redirects it to our common logger
 	zap.RedirectStdLogAt(appLogger, zap.DebugLevel)
@@ -222,7 +216,7 @@ func applicationLogger(
 		}()
 	}
 
-	return tracer
+	return logger, tracer
 }
 
 // NewLogger creates a new logger with sane defaults based on a varity of rules described
