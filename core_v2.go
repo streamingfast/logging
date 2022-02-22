@@ -37,6 +37,7 @@ type loggerOptions struct {
 	forceProductionLogger bool
 	// Use internally only, no With... value defined for it
 	loggerName string
+	encoder    zapcore.Encoder
 }
 
 func newLoggerOptions(shortName string, opts ...LoggerOption) loggerOptions {
@@ -68,6 +69,12 @@ type loggerFuncOption func(o *loggerOptions)
 
 func (f loggerFuncOption) apply(o *loggerOptions) {
 	f(o)
+}
+
+func WithEncoder(encoder zapcore.Encoder) LoggerOption {
+	return loggerFuncOption(func(o *loggerOptions) {
+		o.encoder = encoder
+	})
 }
 
 func WithSwitcherServerAutoStart() LoggerOption {
@@ -290,15 +297,18 @@ func maybeNewLogger(opts *loggerOptions) (logger *zap.Logger, err error) {
 		return config.Build(zapOptions...)
 	}
 
-	// Development logger
-	isTTY := terminal.IsTerminal(int(os.Stderr.Fd()))
 	logStdoutWriter := zapcore.Lock(os.Stderr)
-	verbosity := 1
-	if opts.encoderVerbosity != nil {
-		verbosity = *opts.encoderVerbosity
+	var encoder = opts.encoder
+	if encoder == nil {
+		// Development logger
+		isTTY := terminal.IsTerminal(int(os.Stderr.Fd()))
+		verbosity := 1
+		if opts.encoderVerbosity != nil {
+			verbosity = *opts.encoderVerbosity
+		}
+		encoder = NewEncoder(verbosity, isTTY)
 	}
-
-	return zap.New(zapcore.NewCore(NewEncoder(verbosity, isTTY), logStdoutWriter, opts.level), zapOptions...), nil
+	return zap.New(zapcore.NewCore(encoder, logStdoutWriter, opts.level), zapOptions...), nil
 }
 
 type Tracer interface {

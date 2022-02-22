@@ -10,11 +10,11 @@ import (
 	"github.com/streamingfast/logging/example/pkg2"
 )
 
-var zlog, tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example",
-	// By default active only when a production environment is detected (e.g. when file '/.dockerenv' file exists).
-	// But for the sake of the example here, with forcecully activate it.
-	logging.WithSwitcherServerAutoStart(),
-)
+var zlog, tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example")
+
+// By default active only when a production environment is detected (e.g. when file '/.dockerenv' file exists).
+// But for the sake of the example here, with forcecully activate it.
+//logging.WithSwitcherServerAutoStart(),
 
 func main() {
 	fmt.Println("This demo show case some features of this logging library.")
