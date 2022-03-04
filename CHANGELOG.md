@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Deprecated** `logging.Register`, use `var zlog, _ = logging.PackageLogger(<shortName>, "...")` instead.
 * **Deprecated** `logging.RegisterOnUpdate`, use `logging.LoggerOnUpdate` instead (will probably be removed actually entirely since it's not needed anymore).
 * **Deprecated** `logging.WithServiceName`, no replacement yet (will be `logging.LoggerServiceName` in a future release, if unspecified `shortName` will be used).
-* **Deprecated** `logging.Handler`, you should use `logging.NewAddTraceIDMiddleware` instead.
+
+### Removed
+
+* **BREAKING CHANGE** Removed `logging.Handler`, it has been moved to `dtracing` package to limit transitive depdendencies on this project, you should use `dtracing.NewAddTraceIDAwareLoggerMiddleware` instead.
 
 ## 2020-03-21
 
