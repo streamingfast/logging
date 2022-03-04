@@ -139,14 +139,17 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 		line.AppendString(c.colorString(grayFg.Nos(true), ent.Time.Format("2006-01-02T15:04:05.000Z0700")+" "))
 	}
 
-	showLoggerName := c.showLoggerName && ent.LoggerName != ""
-	if showLoggerName {
+	if c.showLoggerName {
 		loggerName := ent.LoggerName
-		if loggerName == "common" && ent.Caller.Defined {
-			base := path.Base(ent.Caller.FullPath())
-			packagePath := strings.Split(base, ".")[0]
-			if packagePath != "" {
-				loggerName = packagePath
+		if loggerName == "" {
+			if ent.Caller.Defined {
+				base := path.Base(ent.Caller.FullPath())
+				packagePath := strings.Split(base, ".")[0]
+				if packagePath != "" {
+					loggerName = packagePath
+				}
+			} else {
+				loggerName = "<n/a>"
 			}
 		}
 

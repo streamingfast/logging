@@ -23,6 +23,9 @@ import (
 // to enabled except a specific package (i.e. `TRACE=.*,-github.com/specific/package`).
 //
 // In all other cases, tracing is disabled.
+//
+// Deprecated: Define your logger and `Tracer` directly with `var zlog, tracer = logging.PackageLogger(<shortName>, "...")`
+// instead of separately, `tracer.Enabled()` can then be used to determine if tracing should be enabled (can be enable dynamically).
 func IsTraceEnabled(shortName string, packageID string) bool {
 	trace := os.Getenv("TRACE")
 	if trace == "" {

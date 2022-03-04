@@ -39,9 +39,9 @@ func (h *switcherServerHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	spec := newLogLevelSpecFromMap(map[string]string{
+	spec := newLogLevelSpec(envGetFromMap(map[string]string{
 		strings.ToUpper(in.Level): in.Inputs,
-	})
+	}))
 
 	globalRegistry.forAllEntriesMatchingSpec(spec, func(entry *registryEntry, level zapcore.Level, trace bool) {
 		globalRegistry.setLevelForEntry(entry, level, trace)

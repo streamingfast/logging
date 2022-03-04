@@ -111,6 +111,8 @@ func IsProductionEnvironment() bool {
 	return !os.IsNotExist(err)
 }
 
+// Deprecated: Will be removed in a future version, use `InstantiateLoggers` and configure it the way you want
+// instead.
 func BasicLoggingConfig(serviceName string, atomicLevel zap.AtomicLevel, opts ...zap.Option) *zap.Config {
 	var config zap.Config
 

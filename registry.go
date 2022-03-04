@@ -26,51 +26,84 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type registerConfig struct {
+var defaultLogger = zap.NewNop()
+
+type loggerConfig struct {
+	isRootLogger   bool
 	shortName      string
+	defaultLevel   *zapcore.Level
 	isTraceEnabled *bool
 	onUpdate       func(newLogger *zap.Logger)
 }
 
-// RegisterOption are option parameters that you can set when registering a new logger
-// in the system using `Register` function.
-type RegisterOption interface {
-	apply(config *registerConfig)
+// LoggerOption are option parameters that you can set when creating a `PackageLogger`.
+type LoggerOption interface {
+	apply(config *loggerConfig)
 }
 
-type registerOptionFunc func(config *registerConfig)
+type loggerOptionFunc func(config *loggerConfig)
 
-func (f registerOptionFunc) apply(config *registerConfig) {
+func (f loggerOptionFunc) apply(config *loggerConfig) {
 	f(config)
 }
 
-// RegisterOnUpdate enable you to have a hook function that will receive the new logger
+// Deprecated: Use LoggerOnUpdate instead.
+func RegisterOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
+	return LoggerOnUpdate(onUpdate)
+}
+
+// LoggerOnUpdate enable you to have a hook function that will receive the new logger
 // that is going to be assigned to your logger instance. This is useful in some situation
 // where you need to update other instances or re-configuring a bit the logger when
 // a new one is attached.
 //
 // This is called **after** the instance has been re-assigned.
-func RegisterOnUpdate(onUpdate func(newLogger *zap.Logger)) RegisterOption {
-	return registerOptionFunc(func(config *registerConfig) {
+func LoggerOnUpdate(onUpdate func(newLogger *zap.Logger)) LoggerOption {
+	return loggerOptionFunc(func(config *loggerConfig) {
 		config.onUpdate = onUpdate
 	})
 }
 
-func registerShortName(shortName string) RegisterOption {
-	return registerOptionFunc(func(config *registerConfig) {
+// LoggerDefaultLevel can be used to set the default level of the logger if nothing else is overriding it.
+//
+// While the library offers you to set the default level, we recommend to not use this method
+// unless you feel is strictly necessary, specially in libraries code. Indeed, setting for example your
+// level to `INFO` on the loggers of your library would mean that anyone importing your code
+// and instantiating the loggers would automatically see your `INFO` log line which is usually
+// disruptive.
+//
+// Instead of using this, use `logging.WithDefaultSpec` to specify a default level via the logger's short
+// name for example.
+func LoggerDefaultLevel(level zapcore.Level) LoggerOption {
+	return loggerOptionFunc(func(config *loggerConfig) {
+		config.defaultLevel = &level
+	})
+}
+
+func loggerRoot() LoggerOption {
+	return loggerOptionFunc(func(config *loggerConfig) {
+		config.isRootLogger = true
+	})
+}
+
+func loggerShortName(shortName string) LoggerOption {
+	return loggerOptionFunc(func(config *loggerConfig) {
 		config.shortName = shortName
 	})
 }
 
-func registerWithTracer(isEnabled *bool) RegisterOption {
-	return registerOptionFunc(func(config *registerConfig) {
+func loggerWithTracer(isEnabled *bool) LoggerOption {
+	return loggerOptionFunc(func(config *loggerConfig) {
 		config.isTraceEnabled = isEnabled
 	})
 }
 
 type LoggerExtender func(*zap.Logger) *zap.Logger
 
+type loggerFactory func(name string, level zap.AtomicLevel) *zap.Logger
+
 type registryEntry struct {
+	isRoot       bool
 	packageID    string
 	shortName    string
 	atomicLevel  zap.AtomicLevel
@@ -80,9 +113,22 @@ type registryEntry struct {
 }
 
 func (e *registryEntry) String() string {
+	return e.string(false)
+}
+
+func (e *registryEntry) string(extended bool) string {
+	shortName := "<none>"
+	if e.shortName != "" {
+		shortName = e.shortName
+	}
+
 	loggerPtr := "<nil>"
+	levels := ""
 	if e.logPtr != nil {
 		loggerPtr = fmt.Sprintf("%p", e.logPtr)
+		if extended {
+			levels = " [" + computeLevelsString(e.logPtr.Core()) + "]"
+		}
 	}
 
 	traceEnabled := false
@@ -90,31 +136,47 @@ func (e *registryEntry) String() string {
 		traceEnabled = *e.traceEnabled
 	}
 
-	return fmt.Sprintf("%s @ %s (level: %s, trace?: %t, ptr: %s)", e.shortName, e.packageID, e.atomicLevel.Level(), traceEnabled, loggerPtr)
+	return fmt.Sprintf("%s @ %s (level: %s, trace?: %t, ptr: %s%s)", shortName, e.packageID, e.atomicLevel.Level(), traceEnabled, loggerPtr, levels)
 }
 
-var globalRegistry = newRegistry("global")
-var defaultLogger = zap.NewNop()
+var zapLevels = []zapcore.Level{
+	zap.DebugLevel,
+	zap.InfoLevel,
+	zap.WarnLevel,
+	zap.ErrorLevel,
+	zap.DPanicLevel,
+	zap.PanicLevel,
+}
 
-// Deprecated: will be replaced by RegisterLogger
-func Register(packageID string, zlogPtr **zap.Logger, options ...RegisterOption) {
+func computeLevelsString(core zapcore.Core) string {
+	levels := make([]string, len(zapLevels))
+	for i, level := range zapLevels {
+		state := "Disabled"
+		if core.Enabled(level) {
+			state = "Enabled"
+		}
+
+		levels[i] = fmt.Sprintf("%s => %s", level.String(), state)
+	}
+
+	return strings.Join(levels, ", ")
+}
+
+// Deprecated: Use `var zlog, _ = logging.PackageLogger(<shortName>, "...")` instead.
+func Register(packageID string, zlogPtr **zap.Logger, options ...LoggerOption) {
 	if *zlogPtr == nil {
 		*zlogPtr = zap.NewNop()
 	}
 	register(globalRegistry, packageID, *zlogPtr, options...)
 }
 
-func RegisterLogger(packageID string, zlogPtr *zap.Logger, options ...RegisterOption) {
-	register(globalRegistry, packageID, zlogPtr, options...)
-}
-
-func register2(registry *registry, shortName string, packageID string, options ...RegisterOption) (*zap.Logger, Tracer) {
+func register2(registry *registry, shortName string, packageID string, options ...LoggerOption) (*zap.Logger, Tracer) {
 	logger := zap.NewNop()
 	tracer := boolTracer{new(bool)}
 
-	allOptions := append([]RegisterOption{
-		registerShortName(shortName),
-		registerWithTracer(tracer.value),
+	allOptions := append([]LoggerOption{
+		loggerShortName(shortName),
+		loggerWithTracer(tracer.value),
 	}, options...)
 
 	register(registry, packageID, logger, allOptions...)
@@ -122,34 +184,27 @@ func register2(registry *registry, shortName string, packageID string, options .
 	return logger, tracer
 }
 
-func registerDebug(registry *registry, shortName string, packageID string, logger *zap.Logger, options ...RegisterOption) (*zap.Logger, Tracer) {
-	tracer := boolTracer{new(bool)}
-
-	allOptions := append([]RegisterOption{
-		registerShortName(shortName),
-		registerWithTracer(tracer.value),
-	}, options...)
-
-	register(registry, packageID, logger, allOptions...)
-
-	return logger, tracer
-}
-
-func register(registry *registry, packageID string, zlogPtr *zap.Logger, options ...RegisterOption) {
+func register(registry *registry, packageID string, zlogPtr *zap.Logger, options ...LoggerOption) {
 	if zlogPtr == nil {
 		panic("the zlog pointer (of type **zap.Logger) must be set")
 	}
 
-	config := registerConfig{}
+	config := loggerConfig{}
 	for _, opt := range options {
 		opt.apply(&config)
 	}
 
+	defaultLevel := zapcore.ErrorLevel
+	if config.defaultLevel != nil {
+		defaultLevel = *config.defaultLevel
+	}
+
 	entry := &registryEntry{
+		isRoot:       config.isRootLogger,
 		packageID:    packageID,
 		shortName:    config.shortName,
 		traceEnabled: config.isTraceEnabled,
-		atomicLevel:  zap.NewAtomicLevelAt(zapcore.ErrorLevel),
+		atomicLevel:  zap.NewAtomicLevelAt(defaultLevel),
 		logPtr:       zlogPtr,
 		onUpdate:     config.onUpdate,
 	}
@@ -211,6 +266,9 @@ func extend(extender LoggerExtender, tracing tracingType, regexps ...string) {
 
 // Override sets the given logger on previously registered and next
 // registrations.  Useful in tests.
+//
+// Deprecated: Call `logging.InstantiateLoggers` directly and use the `logging.WithDefaultSpec`
+// to configure the various loggers.
 func Override(logger *zap.Logger) {
 	defaultLogger = logger
 	Set(logger)
@@ -225,6 +283,8 @@ func Override(logger *zap.Logger) {
 //
 // If `DEBUG` is set to something else than `true` and/or if `TRACE` is set
 // to something else than
+//
+// Deprecated: Call `logging.InstantiateLoggers` directly instead.
 func TestingOverride() {
 	debug := os.Getenv("DEBUG")
 	trace := os.Getenv("TRACE")
@@ -293,25 +353,47 @@ type registry struct {
 	entriesByPackageID map[string]*registryEntry
 	entriesByShortName map[string][]*registryEntry
 
+	rootEntry *registryEntry
+
 	dbgLogger *zap.Logger
 }
 
-func newRegistry(name string) *registry {
-	return &registry{
+func newRegistry(name string, logger *zap.Logger) *registry {
+	registryLogger := logger.Named(name)
+	registryLogger.Info("creating registry")
+
+	registry := &registry{
 		name:               name,
 		entriesByPackageID: make(map[string]*registryEntry),
 		entriesByShortName: make(map[string][]*registryEntry),
-		factory: func(name string, level zap.AtomicLevel) *zap.Logger {
-			loggerOptions := newLoggerOptions("", WithAtomicLevel(level))
-			if name != "" {
-				loggerOptions.loggerName = name
-			}
-
-			return newLogger(&loggerOptions)
-		},
-
-		dbgLogger: dbgZlog.With(zap.String("registry", name)),
+		dbgLogger:          registryLogger,
 	}
+
+	registry.factory = func(name string, level zap.AtomicLevel) *zap.Logger {
+		loggerOptions := newInstantiateOptions()
+
+		return newLogger(registry.dbgLogger, name, level, &loggerOptions)
+	}
+
+	return registry
+}
+
+func debugLoggerForLoggingLibrary() (*zap.Logger, Tracer) {
+	registry := newRegistry("logging_dbg", zap.NewNop())
+	logger, tracer := packageLogger(registry, "logging", "github.com/streamingfast/logging")
+
+	registry.dbgLogger = logger
+
+	registry.forAllEntries(func(entry *registryEntry) {
+		registry.createLoggerForEntry(entry)
+	})
+
+	spec := newLogLevelSpecFromEnv("__LOGGING_")
+	registry.forAllEntriesMatchingSpec(spec, func(entry *registryEntry, level zapcore.Level, trace bool) {
+		registry.setLevelForEntry(entry, level, trace)
+	})
+
+	return logger, tracer
 }
 
 func (r *registry) registerEntry(entry *registryEntry) {
@@ -334,6 +416,20 @@ func (r *registry) registerEntry(entry *registryEntry) {
 		r.entriesByShortName[shortName] = append(r.entriesByShortName[shortName], entry)
 	}
 
+	if entry.isRoot {
+		if r.rootEntry != nil {
+			panic(fmt.Errorf("trying to register a second root logger, existing root logger is registered under %s (%s), trying to now register %s (%s)",
+				r.rootEntry.shortName,
+				r.rootEntry.packageID,
+				entry.shortName,
+				entry.packageID,
+			))
+		}
+
+		r.rootEntry = entry
+		r.dbgLogger.Info("registering root logger", zap.Stringer("entry", r.rootEntry))
+	}
+
 	r.dbgLogger.Info("registered entry", zap.String("short_name", shortName), zap.String("id", id))
 }
 
@@ -343,6 +439,7 @@ func (r *registry) forAllEntries(callback func(entry *registryEntry)) {
 	}
 }
 
+// forAllEntriesMatchingSpec iterate sequentially through the sorted spec
 func (r *registry) forAllEntriesMatchingSpec(spec *logLevelSpec, callback func(entry *registryEntry, level zapcore.Level, trace bool)) {
 	for _, specForKey := range spec.sortedSpecs() {
 		if specForKey.key == "true" || specForKey.key == "*" {
@@ -390,28 +487,25 @@ func (r *registry) forEntriesMatchingSpec(spec *levelSpec, callback func(entry *
 	}
 }
 
-func (r *registry) setLoggerForEntry(entry *registryEntry, level zapcore.Level, trace bool) {
+func (r *registry) createLoggerForEntry(entry *registryEntry) {
 	if entry == nil {
 		return
 	}
 
-	entry.atomicLevel.SetLevel(level)
+	r.dbgLogger.Info("creating logger on entry from registry factory",
+		zap.Stringer("to_level", entry.atomicLevel),
+		zap.Boolp("trace_enabled", entry.traceEnabled),
+		zap.Stringer("entry", entry),
+	)
+
 	logger := r.factory(entry.shortName, entry.atomicLevel)
 
 	ve := reflect.ValueOf(entry.logPtr).Elem()
 	ve.Set(reflect.ValueOf(logger).Elem())
 
-	// It's possible for an entry to have no tracer registered, for example if the legacy
-	// register method is used. We must protect from this and not set anything.
-	if entry.traceEnabled != nil {
-		*entry.traceEnabled = trace
-	}
-
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
 	}
-
-	r.dbgLogger.Info("set logger on entry", zap.Stringer("entry", entry), zap.Stringer("to_level", level), zap.Bool("trace_enabled", trace))
 }
 
 func (r *registry) setLevelForEntry(entry *registryEntry, level zapcore.Level, trace bool) {
@@ -419,6 +513,7 @@ func (r *registry) setLevelForEntry(entry *registryEntry, level zapcore.Level, t
 		return
 	}
 
+	r.dbgLogger.Info("setting logger level", zap.Stringer("to_level", level), zap.Bool("trace_enabled", trace), zap.Stringer("entry", entry))
 	entry.atomicLevel.SetLevel(level)
 
 	// It's possible for an entry to have no tracer registered, for example if the legacy
@@ -426,8 +521,22 @@ func (r *registry) setLevelForEntry(entry *registryEntry, level zapcore.Level, t
 	if entry.traceEnabled != nil {
 		*entry.traceEnabled = trace
 	}
+}
 
-	r.dbgLogger.Info("set level on entry", zap.Stringer("entry", entry))
+func (r *registry) dumpRegistryToLogger() {
+	r.dbgLogger.Info("dumping registry to logger", zap.Int("entries", len(r.entriesByPackageID)))
+
+	for _, entry := range r.entriesByPackageID {
+		r.dbgLogger.Info("registered entry", zap.String("entry", entry.string(true)))
+	}
+
+	if r.rootEntry != nil {
+		r.dbgLogger.Info("registered root entry", zap.Stringer("entry", r.rootEntry))
+	} else {
+		r.dbgLogger.Info("no root entry")
+	}
+
+	r.dbgLogger.Info("dumping terminated")
 }
 
 func validateEntryIdentifier(tag string, rawInput string, allowEmpty bool) string {

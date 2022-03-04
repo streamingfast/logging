@@ -54,20 +54,22 @@ func (l *logLevelSpec) String() string {
 	return fmt.Sprintf("By Key (%s), By Level (%s)", strings.Join(byKeySpecs, " | "), strings.Join(byLevelSpecs, " | "))
 }
 
-func newLogLevelSpecFromEnv() *logLevelSpec {
-	return newLogLevelSpecFromMap(map[string]string{
-		"TRACE":   os.Getenv("TRACE"),
-		"DEBUG":   os.Getenv("DEBUG"),
-		"INFO":    os.Getenv("INFO"),
-		"WARNING": os.Getenv("WARNING"),
-		"WARN":    os.Getenv("WARN"),
-		"ERROR":   os.Getenv("ERROR"),
-		"DLOG":    os.Getenv("DLOG"),
-	})
+func envGetFromMap(mappings map[string]string) func(string) string {
+	return func(key string) string {
+		return mappings[key]
+	}
 }
 
-func newLogLevelSpecFromMap(env map[string]string) *logLevelSpec {
-	return newLogLevelSpec(func(s string) string { return env[s] })
+func newLogLevelSpecFromEnv(prefix string) *logLevelSpec {
+	return newLogLevelSpec(envGetFromMap(map[string]string{
+		"TRACE":   os.Getenv(prefix + "TRACE"),
+		"DEBUG":   os.Getenv(prefix + "DEBUG"),
+		"INFO":    os.Getenv(prefix + "INFO"),
+		"WARNING": os.Getenv(prefix + "WARNING"),
+		"WARN":    os.Getenv(prefix + "WARN"),
+		"ERROR":   os.Getenv(prefix + "ERROR"),
+		"DLOG":    os.Getenv(prefix + "DLOG"),
+	}))
 }
 
 func newLogLevelSpec(envGet func(string) string) *logLevelSpec {
@@ -159,6 +161,13 @@ func (s *logLevelSpec) fillKeyValue(input string) {
 	}
 }
 
+// sortedSpecs sorts the current `spec` instance by their `ordering` value, The `ordering`
+// value represents the order in which this spec was added relative to all others. It means
+// that an low ordering value has less precedence than a high ordering value.
+//
+// The actual semantic of the ordering is left to the one constructing the overall `logLevelSpec`,
+// it could be for example that a level read from a config file has more precedence than one
+// created from and environment variable.
 func (s *logLevelSpec) sortedSpecs() (specs []*levelSpec) {
 	specs = make([]*levelSpec, 0, len(s.byKey))
 	for _, specSlice := range s.byKey {
