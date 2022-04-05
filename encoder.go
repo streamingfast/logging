@@ -39,13 +39,14 @@ const (
 
 var bufferpool = buffer.NewPool()
 var levelToColor map[zapcore.Level]Color
+var levelToShort map[zapcore.Level]string
 
 var _loggerPool = sync.Pool{New: func() interface{} {
 	return &Encoder{}
 }}
 
 func init() {
-	levelToColor = make(map[zapcore.Level]Color)
+	levelToColor = make(map[zapcore.Level]Color, 7)
 	levelToColor[zap.DebugLevel] = MagentaFg
 	levelToColor[zap.InfoLevel] = GreenFg
 	levelToColor[zap.WarnLevel] = BrownFg
@@ -53,6 +54,15 @@ func init() {
 	levelToColor[zap.DPanicLevel] = RedFg
 	levelToColor[zap.PanicLevel] = RedFg
 	levelToColor[zap.FatalLevel] = RedFg
+
+	levelToShort = make(map[zapcore.Level]string, 7)
+	levelToShort[zap.DebugLevel] = "DEBG"
+	levelToShort[zap.InfoLevel] = "INFO"
+	levelToShort[zap.WarnLevel] = "WARN"
+	levelToShort[zap.ErrorLevel] = "ERRO"
+	levelToShort[zap.DPanicLevel] = "PANI"
+	levelToShort[zap.PanicLevel] = "PANI"
+	levelToShort[zap.FatalLevel] = "FATA"
 }
 
 type Encoder struct {
@@ -136,7 +146,24 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 	lineColor := levelColor(ent.Level)
 
 	if c.showTime {
-		line.AppendString(c.colorString(grayFg.Nos(true), ent.Time.Format("2006-01-02T15:04:05.000Z0700")+" "))
+		line.AppendString(c.colorString(grayFg.Nos(true), ent.Time.Format("2006-01-02T15:04:05.000Z0700")))
+		line.AppendString(" ")
+	}
+
+	// Append the level when coloring is disabled so it's clear what was the level associated with
+	// the log line. This is useful for people sending the logs to a file via redirection since
+	// coloring is disabled and the level is important piece of information to have.
+	//
+	// This raises the question that the level should maybe be present always even with coloring
+	// enable.
+	if !c.enableAnsiColor {
+		short, found := levelToShort[ent.Level]
+		if !found {
+			short = "UNKN"
+		}
+
+		line.AppendString(short)
+		line.AppendString(" ")
 	}
 
 	if c.showLoggerName {
