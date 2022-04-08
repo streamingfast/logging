@@ -150,21 +150,13 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 		line.AppendString(" ")
 	}
 
-	// Append the level when coloring is disabled so it's clear what was the level associated with
-	// the log line. This is useful for people sending the logs to a file via redirection since
-	// coloring is disabled and the level is important piece of information to have.
-	//
-	// This raises the question that the level should maybe be present always even with coloring
-	// enable.
-	if !c.enableAnsiColor {
-		short, found := levelToShort[ent.Level]
-		if !found {
-			short = "UNKN"
-		}
-
-		line.AppendString(short)
-		line.AppendString(" ")
+	shortLevel, found := levelToShort[ent.Level]
+	if !found {
+		shortLevel = "UNKN"
 	}
+
+	line.AppendString(c.colorString(lineColor.Nos(true), shortLevel))
+	line.AppendString(" ")
 
 	if c.showLoggerName {
 		loggerName := ent.LoggerName
