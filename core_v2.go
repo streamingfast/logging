@@ -477,7 +477,7 @@ func maybeNewLogger(dbgLogger *zap.Logger, name string, level zap.AtomicLevel, o
 }
 
 func createLogFileWriter(logFile string) (zapcore.WriteSyncer, error) {
-	err := os.Mkdir(filepath.Dir(logFile), 0755)
+	err := os.MkdirAll(filepath.Dir(logFile), 0755)
 	if err != nil && !os.IsExist(err) {
 		return nil, fmt.Errorf("make directories for log file %q: %w", logFile, err)
 	}
