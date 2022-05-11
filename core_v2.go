@@ -386,11 +386,11 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 	if options.logLevelSwitcherServerAutoStart != nil && *options.logLevelSwitcherServerAutoStart {
 		go func() {
 			listenAddr := options.logLevelSwitcherServerListenAddr
-			rootLogger.Info("starting atomic level switcher", zap.String("listen_addr", listenAddr))
+			dbgZlog.Info("starting atomic level switcher", zap.String("listen_addr", listenAddr))
 
 			handler := &switcherServerHandler{registry: registry}
 			if err := http.ListenAndServe(listenAddr, handler); err != nil {
-				rootLogger.Warn("failed starting atomic level switcher", zap.Error(err), zap.String("listen_addr", listenAddr))
+				dbgZlog.Warn("failed starting atomic level switcher", zap.Error(err), zap.String("listen_addr", listenAddr))
 			}
 		}()
 	}
