@@ -193,6 +193,8 @@ func valueToLevelAndTrace(input string) (zapcore.Level, bool, bool) {
 		return zapcore.WarnLevel, false, true
 	case "error":
 		return zapcore.ErrorLevel, false, true
+	case "panic", "-":
+		return zapcore.PanicLevel, false, true
 	}
 
 	// Invalid case, the actual level is there but should not be considered

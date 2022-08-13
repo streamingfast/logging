@@ -197,6 +197,19 @@ func TestAppAndPkgLogger_LoggerDefaultLevel_EnvDlogOverrideLibToDebug(t *testing
 	assertLevelAndTraceEnabled(t, appLogger, zap.InfoLevel, appTracer, traceShouldBeDisabled)
 }
 
+func TestAppAndPkgLogger_LoggerDefaultLevel_EnvDlogOverrideLibToSilence(t *testing.T) {
+	env := fakeEnv(map[string]string{
+		"DLOG": "com/lib=-",
+	})
+
+	registry := newRegistry("test", dbgZlog)
+	pkgLogger, pkgTracer := packageLogger(registry, "lib", "com/lib", LoggerDefaultLevel(zap.InfoLevel))
+	appLogger, appTracer := applicationLogger(registry, env, "test", "com/test")
+
+	assertLevelAndTraceEnabled(t, pkgLogger, zap.PanicLevel, pkgTracer, traceShouldBeDisabled)
+	assertLevelAndTraceEnabled(t, appLogger, zap.InfoLevel, appTracer, traceShouldBeDisabled)
+}
+
 func TestLogger_CustomizedNamePerLogger(t *testing.T) {
 	env := fakeEnv(map[string]string{
 		"DEBUG": "*",
