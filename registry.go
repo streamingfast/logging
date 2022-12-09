@@ -16,14 +16,12 @@ package logging
 
 import (
 	"fmt"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
-	"sync"
-
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 var defaultLogger = zap.NewNop()
@@ -168,20 +166,6 @@ func Register(packageID string, zlogPtr **zap.Logger, options ...LoggerOption) {
 		*zlogPtr = zap.NewNop()
 	}
 	register(globalRegistry, packageID, *zlogPtr, options...)
-}
-
-func register2(registry *registry, shortName string, packageID string, options ...LoggerOption) (*zap.Logger, Tracer) {
-	logger := zap.NewNop()
-	tracer := boolTracer{new(bool)}
-
-	allOptions := append([]LoggerOption{
-		loggerShortName(shortName),
-		loggerWithTracer(tracer.value),
-	}, options...)
-
-	register(registry, packageID, logger, allOptions...)
-
-	return logger, tracer
 }
 
 func register(registry *registry, packageID string, zlogPtr *zap.Logger, options ...LoggerOption) {
@@ -345,9 +329,14 @@ func setLogger(entry *registryEntry, logger *zap.Logger, tracing tracingType) {
 	}
 }
 
-type registry struct {
-	sync.RWMutex
+type Registry interface {
+	InstantiateLogger(packageID string)
+	Register(shortName string, packageID string, options ...LoggerOption) (*zap.Logger, Tracer)
+	SetLevel(filterString string, level zapcore.Level, tracer bool)
+	GetLoggerByPackageID(packageID string) (*zap.Logger, Tracer, bool)
+}
 
+type registry struct {
 	name               string
 	factory            loggerFactory
 	entriesByPackageID map[string]*registryEntry
@@ -356,6 +345,10 @@ type registry struct {
 	rootEntry *registryEntry
 
 	dbgLogger *zap.Logger
+}
+
+func NewRegistry(name string) Registry {
+	return newRegistry(name, zap.NewNop())
 }
 
 func newRegistry(name string, logger *zap.Logger) *registry {
@@ -394,6 +387,27 @@ func debugLoggerForLoggingLibrary() (*zap.Logger, Tracer) {
 	})
 
 	return logger, tracer
+}
+
+func (r *registry) Register(shortName string, packageID string, options ...LoggerOption) (*zap.Logger, Tracer) {
+	logger := zap.NewNop()
+	tracer := boolTracer{new(bool)}
+
+	allOptions := append([]LoggerOption{
+		loggerShortName(shortName),
+		loggerWithTracer(tracer.value),
+	}, options...)
+
+	register(r, packageID, logger, allOptions...)
+
+	return logger, tracer
+}
+
+func (r *registry) GetLoggerByPackageID(packageID string) (*zap.Logger, Tracer, bool) {
+	if v, ok := r.entriesByPackageID[packageID]; ok {
+		return v.logPtr, &boolTracer{v.traceEnabled}, true
+	}
+	return nil, nil, false
 }
 
 func (r *registry) registerEntry(entry *registryEntry) {
@@ -487,6 +501,10 @@ func (r *registry) forEntriesMatchingSpec(spec *levelSpec, callback func(entry *
 	}
 }
 
+func (r *registry) InstantiateLogger(packageID string) {
+	r.createLoggerForEntry(r.entriesByPackageID[packageID])
+}
+
 func (r *registry) createLoggerForEntry(entry *registryEntry) {
 	if entry == nil {
 		return
@@ -506,6 +524,17 @@ func (r *registry) createLoggerForEntry(entry *registryEntry) {
 	if entry.onUpdate != nil {
 		entry.onUpdate(logger)
 	}
+}
+
+func (r *registry) SetLevel(filterString string, level zapcore.Level, tracer bool) {
+	r.forEntriesMatchingSpec(&levelSpec{
+		key:   filterString,
+		level: level,
+		trace: tracer,
+	}, func(entry *registryEntry, level zapcore.Level, trace bool) {
+		r.setLevelForEntry(entry, level, tracer)
+	})
+
 }
 
 func (r *registry) setLevelForEntry(entry *registryEntry, level zapcore.Level, trace bool) {

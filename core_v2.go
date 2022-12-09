@@ -242,7 +242,7 @@ func PackageLogger(shortName string, packageID string, registerOptions ...Logger
 }
 
 func packageLogger(registry *registry, shortName string, packageID string, registerOptions ...LoggerOption) (*zap.Logger, Tracer) {
-	return register2(registry, shortName, packageID, registerOptions...)
+	return registry.Register(shortName, packageID, registerOptions...)
 }
 
 // InstantiateLoggers correctly instantiate all the loggers of your application at the correct
@@ -304,7 +304,7 @@ func RootLogger(shortName string, packageID string, opts ...LoggerOption) (*zap.
 }
 
 func rootLogger(registry *registry, shortName string, packageID string, opts ...LoggerOption) (*zap.Logger, Tracer) {
-	return register2(registry, shortName, packageID, append(opts, loggerRoot())...)
+	return registry.Register(shortName, packageID, append(opts, loggerRoot())...)
 }
 
 func instantiateLoggers(registry *registry, envGet func(string) string, options instantiateOptions) {
