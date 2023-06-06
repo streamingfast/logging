@@ -12,9 +12,9 @@ import (
 
 var zlog, tracer = logging.ApplicationLogger("example", "github.com/streamingfast/logging/example")
 
-// By default active only when a production environment is detected (e.g. when file '/.dockerenv' file exists).
-// But for the sake of the example here, with forcecully activate it.
-//logging.WithSwitcherServerAutoStart(),
+// By default active only when a production environment is detected or forced
+// (various heuristics used). You can force it to be run using:
+// logging.WithLogLevelSwitcherServerAutoStart(),
 
 func main() {
 	fmt.Println("This demo show case some features of this logging library.")

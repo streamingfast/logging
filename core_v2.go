@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -34,6 +35,7 @@ type instantiateOptions struct {
 	forceProductionLogger            bool
 	preSpec                          *logLevelSpec
 	reportAllErrors                  *bool
+	productionLoggerDetector         func() bool
 
 	// Deprecated
 	serviceName *string
@@ -66,6 +68,7 @@ func (o instantiateOptions) MarshalLogObject(encoder zapcore.ObjectEncoder) erro
 	encoder.AddString("log_level_switcher_server_listen_addr", o.logLevelSwitcherServerListenAddr)
 	encoder.AddString("pre_spec", ptrLogLevelSpecToString(o.preSpec))
 	encoder.AddString("report_all_errors", ptrBoolToString(o.reportAllErrors))
+	encoder.AddBool("custom_production_logger_detector", o.productionLoggerDetector != nil)
 
 	encoder.AddString("service_name", ptrStringToString(o.serviceName))
 
@@ -155,6 +158,18 @@ func WithProductionLogger() InstantiateOption {
 	})
 }
 
+// WithProductionDetector changes the production environment detector to the one provided
+// as argument.
+//
+// The default production environment detector tries to infer if running inside a container
+// through various checks. If you want to use a different production environment detector,
+// use this option.
+func WithProductionDetector(productionLoggerDetector func() bool) InstantiateOption {
+	return instantiateFuncOption(func(o *instantiateOptions) {
+		o.productionLoggerDetector = productionLoggerDetector
+	})
+}
+
 // WithDefaultLevel is going to set `level` as the default level for all loggers
 // instantiated.
 func WithDefaultLevel(level zapcore.Level) InstantiateOption {
@@ -227,9 +242,35 @@ func (o *instantiateOptions) isProductionEnvironment() bool {
 		return true
 	}
 
-	_, err := os.Stat("/.dockerenv")
+	if o.productionLoggerDetector != nil {
+		return o.productionLoggerDetector()
+	}
 
-	return !os.IsNotExist(err)
+	// Inside Docker runtime, this file is populated
+	_, err := os.Stat("/.dockerenv")
+	if err == nil {
+		return true
+	}
+
+	// Inside container runtime the mounts can be inspected to see if we are running inside a container
+	if content, err := os.ReadFile("/proc/self/mounts"); err == nil {
+		// The containerd runtime mounts the container rootfs under `/var/lib/containerd`
+		if bytes.Contains(content, []byte("/var/lib/containerd")) {
+			return true
+		}
+
+		// The docker runtime mounts the container rootfs under `/var/lib/docker`
+		if bytes.Contains(content, []byte("/var/lib/docker")) {
+			return true
+		}
+	}
+
+	// Inside Kubernetes runtime, this env var is set
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true
+	}
+
+	return false
 }
 
 // PackageLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
@@ -266,7 +307,8 @@ func packageLogger(registry *registry, shortName string, packageID string, regis
 // around.
 //
 // *Note* The InstantiateLoggers should be called only once per process. That could be enforced
-//        in the future.
+//
+//	in the future.
 func InstantiateLoggers(opts ...InstantiateOption) {
 	instantiateLoggers(globalRegistry, os.Getenv, newInstantiateOptions(opts...))
 }

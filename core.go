@@ -15,6 +15,7 @@
 package logging
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -106,9 +107,31 @@ func LevelFromEnvironment() zap.AtomicLevel {
 }
 
 func IsProductionEnvironment() bool {
+	// Inside Docker runtime, this file is populated
 	_, err := os.Stat("/.dockerenv")
+	if err == nil {
+		return true
+	}
 
-	return !os.IsNotExist(err)
+	// Inside container runtime the mounts can be inspected to see if we are running inside a container
+	if content, err := os.ReadFile("/proc/self/mounts"); err == nil {
+		// The containerd runtime mounts the container rootfs under `/var/lib/containerd`
+		if bytes.Contains(content, []byte("/var/lib/containerd")) {
+			return true
+		}
+
+		// The docker runtime mounts the container rootfs under `/var/lib/docker`
+		if bytes.Contains(content, []byte("/var/lib/docker")) {
+			return true
+		}
+	}
+
+	// Inside Kubernetes runtime, this env var is set
+	if os.Getenv("KUBERNETES_SERVICE_HOST") != "" {
+		return true
+	}
+
+	return false
 }
 
 // Deprecated: Will be removed in a future version, use `InstantiateLoggers` and configure it the way you want
