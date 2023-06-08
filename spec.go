@@ -85,7 +85,14 @@ func newLogLevelSpec(envGet func(string) string) *logLevelSpec {
 
 	input := strings.TrimSpace(envGet("DLOG"))
 	if input != "" {
-		spec.fillKeyValue(input)
+		if strings.Contains(input, "=") {
+			spec.fillKeyValue(input)
+		} else {
+			level, traceEnabled, ok := valueToLevelAndTrace(input)
+			if ok {
+				spec.fillFlat(level, traceEnabled, ".*")
+			}
+		}
 	}
 
 	return spec
@@ -112,7 +119,6 @@ func (s *logLevelSpec) fillEnvFlat(level zapcore.Level, trace bool, key string, 
 // How actually the key are interpreted is not the responsibility of the
 // spec. The <key> can be any string as long as it does not contain "," and "="
 // while.
-//
 func (s *logLevelSpec) fillFlat(level zapcore.Level, trace bool, input string) {
 	for _, key := range strings.Split(input, ",") {
 		key = strings.TrimSpace(key)
@@ -132,7 +138,6 @@ func (s *logLevelSpec) fillFlat(level zapcore.Level, trace bool, input string) {
 // spec. The <key> can be any string as long as it does not contain "," and "="
 // while the <level> should be one of 'error', 'warn' (or 'warning'), 'info', 'debug'
 // or 'trace'.
-//
 func (s *logLevelSpec) fillKeyValue(input string) {
 	for _, keyValue := range strings.Split(input, ",") {
 		keyValue = strings.TrimSpace(keyValue)
@@ -181,7 +186,7 @@ func (s *logLevelSpec) sortedSpecs() (specs []*levelSpec) {
 	return
 }
 
-func valueToLevelAndTrace(input string) (zapcore.Level, bool, bool) {
+func valueToLevelAndTrace(input string) (level zapcore.Level, traceEnabled bool, ok bool) {
 	switch strings.ToLower(input) {
 	case "trace":
 		return zapcore.DebugLevel, true, true
