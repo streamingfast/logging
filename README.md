@@ -49,6 +49,11 @@ On listening servers (port 1065, hint: logs!)
 
 * `curl http://localhost:1065/ -XPUT -d '{"level": "debug"}'`
 
+### Zapx
+
+We provide the package `zapx` as a way to add some helpers that are called mostly similar as regular zap named field like `zap.String(<name>, <value>)` to make some recurring use cases easier to implement globally.
+
+- `zapx.Secret(<name>, <value>)` print the string obfuscated using a 1/4 ratio for masking the input, see [test cases](./zapx/secrets_test.go) to "see" how it looks like.
 
 ## Contributing
 
