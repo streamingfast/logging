@@ -16,12 +16,13 @@ package logging
 
 import (
 	"fmt"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"os"
 	"reflect"
 	"regexp"
 	"strings"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var defaultLogger = zap.NewNop()
@@ -204,6 +205,7 @@ func register(registry *registry, packageID string, zlogPtr *zap.Logger, options
 	setLogger(entry, logger, unspecifiedTracing)
 }
 
+// Deprecated: Do not use, setting a new logger completely is not supported anymore. Use [SetLevelFor] instead.
 func Set(logger *zap.Logger, regexps ...string) {
 	for name, entry := range globalRegistry.entriesByPackageID {
 		if len(regexps) == 0 {
@@ -217,6 +219,16 @@ func Set(logger *zap.Logger, regexps ...string) {
 			}
 		}
 	}
+}
+
+// SetLevelFor sets the level of the logger for all registered loggers in the registry
+// that match the given `input` (which can be a package ID or a short name) and where
+// input accept a regular expression.
+//
+// For all matching loggers, their level will be changed to the specified level
+// and with tracing enabled or not.
+func SetLevelFor(input string, level zapcore.Level, tracer bool) {
+	globalRegistry.SetLevel(input, level, tracer)
 }
 
 // Extend is different than `Set` by being able to re-configure the existing logger set for
