@@ -28,29 +28,29 @@ func TestSecretString_String(t *testing.T) {
 			want: "***",
 		},
 		{
-			name: "Shorter than 6",
+			name: "Length 5: 25% front=1, 10% end=1",
 			s:    SecretString("mysec"),
-			want: "m****",
+			want: "m***c",
 		},
 		{
-			name: "Equal to 6",
-			s:    SecretString("mysecr"),
-			want: "m*****",
+			name: "Length 10: 25% front=2, 10% end=1",
+			s:    SecretString("mysecret12"),
+			want: "my*******2",
 		},
 		{
-			name: "Shorter than 9",
-			s:    SecretString("mysecret"),
-			want: "my******",
+			name: "Length 19: 25% front=4, 10% end=1",
+			s:    SecretString("mysecret12345678901"),
+			want: "myse**************1",
 		},
 		{
-			name: "Equal to 9",
-			s:    SecretString("mysecreti"),
-			want: "my*******",
-		},
-		{
-			name: "Longer than 9",
+			name: "Length 36: 25% front=9, 10% end=3",
 			s:    SecretString("mysecretisverylongandshouldbehidden"),
-			want: "mysecret***************************",
+			want: "mysecret************************den",
+		},
+		{
+			name: "API key example (42 chars): 25% front=10, 10% end=4",
+			s:    SecretString("ac_fake_abcdefghijklmnopqrstuvwxyz123456"),
+			want: "ac_fake_abc**************************3456",
 		},
 	}
 	for _, tt := range tests {
