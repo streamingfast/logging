@@ -50,7 +50,7 @@ func TestSecretString_String(t *testing.T) {
 		{
 			name: "API key example (42 chars): 25% front=10, 10% end=4",
 			s:    SecretString("ac_fake_abcdefghijklmnopqrstuvwxyz123456"),
-			want: "ac_fake_abc**************************3456",
+			want: "ac_fake_ab**************************3456",
 		},
 	}
 	for _, tt := range tests {
