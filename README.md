@@ -54,26 +54,26 @@ The logging library includes an auto-reset feature that automatically resets deb
 
 ### Configuration
 
-Auto-reset is enabled by default in production environments with a 30-minute timeout. You can configure it using the following options:
+Auto-reset is enabled by default with a 30-minute timeout. You can configure it using the following options:
 
 ```go
 // Enable auto-reset with default 30-minute timeout
 logging.InstantiateLoggers(
     logging.WithLogLevelSwitcherServerAutoStart(),
-    logging.WithLogLevelAutoResetEnabled(),
+    logging.WithLogLevelSwitcherServerAutoResetEnabled(),
 )
 
 // Configure custom timeout
 logging.InstantiateLoggers(
     logging.WithLogLevelSwitcherServerAutoStart(),
-    logging.WithLogLevelAutoResetEnabled(),
-    logging.WithLogLevelAutoResetTimeout(15 * time.Minute),
+    logging.WithLogLevelSwitcherServerAutoResetEnabled(),
+    logging.WithLogLevelSwitcherServerAutoResetTimeout(15 * time.Minute),
 )
 
 // Disable auto-reset (useful in development)
 logging.InstantiateLoggers(
     logging.WithLogLevelSwitcherServerAutoStart(),
-    logging.WithLogLevelAutoResetDisabled(),
+    logging.WithLogLevelSwitcherServerAutoResetDisabled(),
 )
 ```
 
@@ -105,7 +105,7 @@ curl http://localhost:1065/ -XPUT -d '{"level": "debug", "inputs": "github.com/m
 # Set trace level for all loggers with auto-reset
 curl http://localhost:1065/ -XPUT -d '{"level": "trace", "inputs": ".*"}'
 
-# Reset to info level (removes from auto-reset tracking)
+# Reset to info level (removes from auto-reset tracking, including permanent patterns)
 curl http://localhost:1065/ -XPUT -d '{"level": "info", "inputs": "github.com/my/package"}'
 ```
 
@@ -115,8 +115,9 @@ curl http://localhost:1065/ -XPUT -d '{"level": "info", "inputs": "github.com/my
 - INFO, WARN, and ERROR levels are not affected by auto-reset
 - When a pattern expires, it's automatically reset to INFO level
 - Permanent patterns (with `"permanent": true`) are never auto-reset
-- Setting a pattern to INFO/WARN/ERROR removes it from auto-reset tracking
+- Setting a pattern to INFO/WARN/ERROR removes it from auto-reset tracking (including permanent patterns)
 - Pattern updates refresh the timeout timer
+- Permanent patterns can only be removed by explicitly setting them to a higher level (INFO/WARN/ERROR)
 
 ### Zapx
 

@@ -78,13 +78,16 @@ func (pt *patternTracker) addOrUpdatePattern(input string, level zapcore.Level, 
 }
 
 // removePattern removes a pattern from tracking (when set to higher level)
+// This removes both permanent and non-permanent patterns
 func (pt *patternTracker) removePattern(input string) {
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 	
-	if _, exists := pt.activePatterns[input]; exists {
+	if pattern, exists := pt.activePatterns[input]; exists {
 		delete(pt.activePatterns, input)
-		pt.logger.Debug("removed pattern from auto-reset tracking", zap.String("pattern", input))
+		pt.logger.Debug("removed pattern from auto-reset tracking", 
+			zap.String("pattern", input),
+			zap.Bool("was_permanent", pattern.permanent))
 	}
 }
 

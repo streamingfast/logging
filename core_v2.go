@@ -32,8 +32,8 @@ type instantiateOptions struct {
 	defaultLevel                     *zapcore.Level
 	logLevelSwitcherServerAutoStart  *bool
 	logLevelSwitcherServerListenAddr string
-	logLevelAutoResetEnabled         *bool
-	logLevelAutoResetTimeout         *time.Duration
+	logLevelSwitcherServerAutoResetEnabled  *bool
+	logLevelSwitcherServerAutoResetTimeout  *time.Duration
 	logToFile                        string
 	forceProductionLogger            bool
 	preSpec                          *logLevelSpec
@@ -61,12 +61,12 @@ func newInstantiateOptions(opts ...InstantiateOption) instantiateOptions {
 		WithSwitcherServerAutoStart().apply(&options)
 	}
 
-	// Enable auto-reset by default in production environments with 30 minute timeout
-	if options.logLevelAutoResetEnabled == nil && options.isProductionEnvironment() {
-		WithLogLevelAutoResetEnabled().apply(&options)
+	// Enable auto-reset by default with 30 minute timeout
+	if options.logLevelSwitcherServerAutoResetEnabled == nil {
+		WithLogLevelSwitcherServerAutoResetEnabled().apply(&options)
 	}
-	if options.logLevelAutoResetTimeout == nil {
-		WithLogLevelAutoResetTimeout(30 * time.Minute).apply(&options)
+	if options.logLevelSwitcherServerAutoResetTimeout == nil {
+		WithLogLevelSwitcherServerAutoResetTimeout(30 * time.Minute).apply(&options)
 	}
 
 	return options
@@ -77,8 +77,8 @@ func (o instantiateOptions) MarshalLogObject(encoder zapcore.ObjectEncoder) erro
 	encoder.AddBool("force_production_logger", o.forceProductionLogger)
 	encoder.AddString("log_level_switcher_server_auto_start", ptrBoolToString(o.logLevelSwitcherServerAutoStart))
 	encoder.AddString("log_level_switcher_server_listen_addr", o.logLevelSwitcherServerListenAddr)
-	encoder.AddString("log_level_auto_reset_enabled", ptrBoolToString(o.logLevelAutoResetEnabled))
-	encoder.AddString("log_level_auto_reset_timeout", ptrDurationToString(o.logLevelAutoResetTimeout))
+	encoder.AddString("log_level_switcher_server_auto_reset_enabled", ptrBoolToString(o.logLevelSwitcherServerAutoResetEnabled))
+	encoder.AddString("log_level_switcher_server_auto_reset_timeout", ptrDurationToString(o.logLevelSwitcherServerAutoResetTimeout))
 	encoder.AddString("pre_spec", ptrLogLevelSpecToString(o.preSpec))
 	encoder.AddString("report_all_errors", ptrBoolToString(o.reportAllErrors))
 	encoder.AddBool("custom_production_logger_detector", o.productionLoggerDetector != nil)
@@ -144,34 +144,34 @@ func WithSwitcherServerListeningAddress(addr string) InstantiateOption {
 	})
 }
 
-// WithLogLevelAutoResetEnabled enables the automatic reset of debug/trace log levels
+// WithLogLevelSwitcherServerAutoResetEnabled enables the automatic reset of debug/trace log levels
 // back to INFO level after a configurable timeout period. This helps prevent
 // accidentally leaving debug/trace levels enabled which can cause excessive logging costs.
 //
 // When enabled, any log level changes to DEBUG or TRACE via the HTTP server will be
 // automatically reset to INFO level after the configured timeout (default 30 minutes).
 // This can be overridden on a per-request basis using the "permanent" field in the HTTP request.
-func WithLogLevelAutoResetEnabled() InstantiateOption {
+func WithLogLevelSwitcherServerAutoResetEnabled() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelAutoResetEnabled = ptrBool(true)
+		o.logLevelSwitcherServerAutoResetEnabled = ptrBool(true)
 	})
 }
 
-// WithLogLevelAutoResetDisabled disables the automatic reset of debug/trace log levels.
+// WithLogLevelSwitcherServerAutoResetDisabled disables the automatic reset of debug/trace log levels.
 // This is useful in development environments where you want debug/trace levels to persist.
-func WithLogLevelAutoResetDisabled() InstantiateOption {
+func WithLogLevelSwitcherServerAutoResetDisabled() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelAutoResetEnabled = ptrBool(false)
+		o.logLevelSwitcherServerAutoResetEnabled = ptrBool(false)
 	})
 }
 
-// WithLogLevelAutoResetTimeout configures the timeout duration after which debug/trace
+// WithLogLevelSwitcherServerAutoResetTimeout configures the timeout duration after which debug/trace
 // log levels will be automatically reset to INFO level. The default is 30 minutes.
 //
-// This setting only takes effect when auto-reset is enabled via WithLogLevelAutoResetEnabled().
-func WithLogLevelAutoResetTimeout(timeout time.Duration) InstantiateOption {
+// This setting only takes effect when auto-reset is enabled via WithLogLevelSwitcherServerAutoResetEnabled().
+func WithLogLevelSwitcherServerAutoResetTimeout(timeout time.Duration) InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelAutoResetTimeout = &timeout
+		o.logLevelSwitcherServerAutoResetTimeout = &timeout
 	})
 }
 
@@ -476,10 +476,10 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 
 			// Initialize pattern tracker if auto-reset is enabled
 			var patternTracker *patternTracker
-			if options.logLevelAutoResetEnabled != nil && *options.logLevelAutoResetEnabled {
+			if options.logLevelSwitcherServerAutoResetEnabled != nil && *options.logLevelSwitcherServerAutoResetEnabled {
 				timeout := 30 * time.Minute // default timeout
-				if options.logLevelAutoResetTimeout != nil {
-					timeout = *options.logLevelAutoResetTimeout
+				if options.logLevelSwitcherServerAutoResetTimeout != nil {
+					timeout = *options.logLevelSwitcherServerAutoResetTimeout
 				}
 				
 				patternTracker = newPatternTracker(registry, timeout, dbgZlog.Named("pattern_tracker"))
