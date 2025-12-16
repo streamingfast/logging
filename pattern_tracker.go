@@ -58,7 +58,7 @@ func (pt *patternTracker) stop() {
 // addOrUpdatePattern adds a new pattern or updates an existing one
 func (pt *patternTracker) addOrUpdatePattern(input string, level zapcore.Level, permanent bool) {
 	// Only track debug and trace levels for auto-reset
-	if level != zapcore.DebugLevel && level < zapcore.DebugLevel {
+	if level <= zapcore.DebugLevel {
 		pt.mu.Lock()
 		defer pt.mu.Unlock()
 		

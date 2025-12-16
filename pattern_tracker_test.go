@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"context"
 	"testing"
 	"time"
 

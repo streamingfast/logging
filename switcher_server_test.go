@@ -3,12 +3,10 @@ package logging
 import (
 	"bytes"
 	"encoding/json"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
