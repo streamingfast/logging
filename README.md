@@ -46,8 +46,78 @@ You can switch log levels dynamically, by poking the port 1065 like this:
 
 On listening servers (port 1065, hint: logs!)
 
+* `curl http://localhost:1065/ -XPUT -d '{"level": "debug", "inputs": "github.com/my/package"}'`
 
-* `curl http://localhost:1065/ -XPUT -d '{"level": "debug"}'`
+## Auto-Reset Feature
+
+The logging library includes an auto-reset feature that automatically resets debug/trace log levels back to INFO after a configurable timeout period. This helps prevent accidentally leaving debug/trace levels enabled, which can cause excessive logging costs.
+
+### Configuration
+
+Auto-reset is enabled by default with a 30-minute timeout. You can configure it using the following options:
+
+```go
+// Enable auto-reset with default 30-minute timeout
+logging.InstantiateLoggers(
+    logging.WithLogLevelSwitcherServerAutoStart(),
+    logging.WithLogLevelSwitcherServerAutoResetEnabled(),
+)
+
+// Configure custom timeout
+logging.InstantiateLoggers(
+    logging.WithLogLevelSwitcherServerAutoStart(),
+    logging.WithLogLevelSwitcherServerAutoResetEnabled(),
+    logging.WithLogLevelSwitcherServerAutoResetTimeout(15 * time.Minute),
+)
+
+// Disable auto-reset (useful in development)
+logging.InstantiateLoggers(
+    logging.WithLogLevelSwitcherServerAutoStart(),
+    logging.WithLogLevelSwitcherServerAutoResetDisabled(),
+)
+```
+
+### HTTP API
+
+The HTTP server accepts the following JSON payload:
+
+```json
+{
+    "level": "debug",
+    "inputs": "github.com/my/package",
+    "permanent": false
+}
+```
+
+- `level`: Log level (trace, debug, info, warn, error)
+- `inputs`: Pattern to match logger names (can be regex)
+- `permanent`: Optional boolean to disable auto-reset for this specific request
+
+### Examples
+
+```bash
+# Set debug level with auto-reset (will reset to INFO after timeout)
+curl http://localhost:1065/ -XPUT -d '{"level": "debug", "inputs": "github.com/my/package"}'
+
+# Set debug level permanently (will not auto-reset)
+curl http://localhost:1065/ -XPUT -d '{"level": "debug", "inputs": "github.com/my/package", "permanent": true}'
+
+# Set trace level for all loggers with auto-reset
+curl http://localhost:1065/ -XPUT -d '{"level": "trace", "inputs": ".*"}'
+
+# Reset to info level (removes from auto-reset tracking, including permanent patterns)
+curl http://localhost:1065/ -XPUT -d '{"level": "info", "inputs": "github.com/my/package"}'
+```
+
+### Behavior
+
+- Only DEBUG and TRACE levels are tracked for auto-reset
+- INFO, WARN, and ERROR levels are not affected by auto-reset
+- When a pattern expires, it's automatically reset to INFO level
+- Permanent patterns (with `"permanent": true`) are never auto-reset
+- Setting a pattern to INFO/WARN/ERROR removes it from auto-reset tracking (including permanent patterns)
+- Pattern updates refresh the timeout timer
+- Permanent patterns can only be removed by explicitly setting them to a higher level (INFO/WARN/ERROR)
 
 ### Zapx
 

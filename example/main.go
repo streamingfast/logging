@@ -42,6 +42,13 @@ func main() {
 	fmt.Println("")
 	fmt.Println(`  curl -d '{"inputs":"example","level":"debug"}' http://localhost:1065`)
 	fmt.Println("")
+	fmt.Println("Auto-reset feature:")
+	fmt.Println("")
+	fmt.Println("Debug/trace levels will automatically reset to INFO after 30 minutes")
+	fmt.Println("to prevent excessive logging costs. Use 'permanent': true to disable:")
+	fmt.Println("")
+	fmt.Println(`  curl -d '{"inputs":"example","level":"debug","permanent":true}' http://localhost:1065`)
+	fmt.Println("")
 	fmt.Println("Accepted 'inputs' is the same as the environment variable above.")
 
 	for {

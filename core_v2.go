@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/blendle/zapdriver"
 	"go.uber.org/zap"
@@ -31,6 +32,8 @@ type instantiateOptions struct {
 	defaultLevel                     *zapcore.Level
 	logLevelSwitcherServerAutoStart  *bool
 	logLevelSwitcherServerListenAddr string
+	logLevelSwitcherServerAutoResetEnabled  *bool
+	logLevelSwitcherServerAutoResetTimeout  *time.Duration
 	logToFile                        string
 	forceProductionLogger            bool
 	preSpec                          *logLevelSpec
@@ -58,6 +61,14 @@ func newInstantiateOptions(opts ...InstantiateOption) instantiateOptions {
 		WithSwitcherServerAutoStart().apply(&options)
 	}
 
+	// Enable auto-reset by default with 30 minute timeout
+	if options.logLevelSwitcherServerAutoResetEnabled == nil {
+		WithLogLevelSwitcherServerAutoResetEnabled().apply(&options)
+	}
+	if options.logLevelSwitcherServerAutoResetTimeout == nil {
+		WithLogLevelSwitcherServerAutoResetTimeout(30 * time.Minute).apply(&options)
+	}
+
 	return options
 }
 
@@ -66,6 +77,8 @@ func (o instantiateOptions) MarshalLogObject(encoder zapcore.ObjectEncoder) erro
 	encoder.AddBool("force_production_logger", o.forceProductionLogger)
 	encoder.AddString("log_level_switcher_server_auto_start", ptrBoolToString(o.logLevelSwitcherServerAutoStart))
 	encoder.AddString("log_level_switcher_server_listen_addr", o.logLevelSwitcherServerListenAddr)
+	encoder.AddString("log_level_switcher_server_auto_reset_enabled", ptrBoolToString(o.logLevelSwitcherServerAutoResetEnabled))
+	encoder.AddString("log_level_switcher_server_auto_reset_timeout", ptrDurationToString(o.logLevelSwitcherServerAutoResetTimeout))
 	encoder.AddString("pre_spec", ptrLogLevelSpecToString(o.preSpec))
 	encoder.AddString("report_all_errors", ptrBoolToString(o.reportAllErrors))
 	encoder.AddBool("custom_production_logger_detector", o.productionLoggerDetector != nil)
@@ -128,6 +141,37 @@ func WithLogLevelSwitcherServerListeningAddress(addr string) InstantiateOption {
 func WithSwitcherServerListeningAddress(addr string) InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
 		o.logLevelSwitcherServerListenAddr = addr
+	})
+}
+
+// WithLogLevelSwitcherServerAutoResetEnabled enables the automatic reset of debug/trace log levels
+// back to INFO level after a configurable timeout period. This helps prevent
+// accidentally leaving debug/trace levels enabled which can cause excessive logging costs.
+//
+// When enabled, any log level changes to DEBUG or TRACE via the HTTP server will be
+// automatically reset to INFO level after the configured timeout (default 30 minutes).
+// This can be overridden on a per-request basis using the "permanent" field in the HTTP request.
+func WithLogLevelSwitcherServerAutoResetEnabled() InstantiateOption {
+	return instantiateFuncOption(func(o *instantiateOptions) {
+		o.logLevelSwitcherServerAutoResetEnabled = ptrBool(true)
+	})
+}
+
+// WithLogLevelSwitcherServerAutoResetDisabled disables the automatic reset of debug/trace log levels.
+// This is useful in development environments where you want debug/trace levels to persist.
+func WithLogLevelSwitcherServerAutoResetDisabled() InstantiateOption {
+	return instantiateFuncOption(func(o *instantiateOptions) {
+		o.logLevelSwitcherServerAutoResetEnabled = ptrBool(false)
+	})
+}
+
+// WithLogLevelSwitcherServerAutoResetTimeout configures the timeout duration after which debug/trace
+// log levels will be automatically reset to INFO level. The default is 30 minutes.
+//
+// This setting only takes effect when auto-reset is enabled via WithLogLevelSwitcherServerAutoResetEnabled().
+func WithLogLevelSwitcherServerAutoResetTimeout(timeout time.Duration) InstantiateOption {
+	return instantiateFuncOption(func(o *instantiateOptions) {
+		o.logLevelSwitcherServerAutoResetTimeout = &timeout
 	})
 }
 
@@ -430,9 +474,33 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 			listenAddr := options.logLevelSwitcherServerListenAddr
 			dbgZlog.Info("starting atomic level switcher", zap.String("listen_addr", listenAddr))
 
-			handler := &switcherServerHandler{registry: registry}
+			// Initialize pattern tracker if auto-reset is enabled
+			var patternTracker *patternTracker
+			if options.logLevelSwitcherServerAutoResetEnabled != nil && *options.logLevelSwitcherServerAutoResetEnabled {
+				timeout := 30 * time.Minute // default timeout
+				if options.logLevelSwitcherServerAutoResetTimeout != nil {
+					timeout = *options.logLevelSwitcherServerAutoResetTimeout
+				}
+				
+				patternTracker = newPatternTracker(registry, timeout, dbgZlog.Named("pattern_tracker"))
+				patternTracker.start()
+				
+				dbgZlog.Info("started pattern tracker for auto-reset functionality", 
+					zap.Duration("timeout", timeout))
+			}
+
+			handler := &switcherServerHandler{
+				registry:       registry,
+				patternTracker: patternTracker,
+			}
+			
 			if err := http.ListenAndServe(listenAddr, handler); err != nil {
 				dbgZlog.Warn("failed starting atomic level switcher", zap.Error(err), zap.String("listen_addr", listenAddr))
+			}
+			
+			// Clean shutdown of pattern tracker
+			if patternTracker != nil {
+				patternTracker.stop()
 			}
 		}()
 	}
@@ -588,6 +656,14 @@ func ptrLevelToString(value *zapcore.Level) string {
 }
 
 func ptrLogLevelSpecToString(value *logLevelSpec) string {
+	if value == nil {
+		return "<nil>"
+	}
+
+	return (*value).String()
+}
+
+func ptrDurationToString(value *time.Duration) string {
 	if value == nil {
 		return "<nil>"
 	}
