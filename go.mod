@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/lithammer/dedent v1.1.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect
