@@ -28,17 +28,17 @@ var dbgZlog, _ = debugLoggerForLoggingLibrary()
 var globalRegistry = newRegistry("global", dbgZlog)
 
 type instantiateOptions struct {
-	consoleOutput                    *string
-	defaultLevel                     *zapcore.Level
-	logLevelSwitcherServerAutoStart  *bool
-	logLevelSwitcherServerListenAddr string
-	logLevelSwitcherServerAutoResetEnabled  *bool
-	logLevelSwitcherServerAutoResetTimeout  *time.Duration
-	logToFile                        string
-	forceProductionLogger            bool
-	preSpec                          *logLevelSpec
-	reportAllErrors                  *bool
-	productionLoggerDetector         func() bool
+	consoleOutput                          *string
+	defaultLevel                           *zapcore.Level
+	logLevelSwitcherServerAutoStart        *bool
+	logLevelSwitcherServerListenAddr       string
+	logLevelSwitcherServerAutoResetEnabled *bool
+	logLevelSwitcherServerAutoResetTimeout *time.Duration
+	logToFile                              string
+	forceProductionLogger                  bool
+	preSpec                                *logLevelSpec
+	reportAllErrors                        *bool
+	productionLoggerDetector               func() bool
 
 	// Deprecated
 	serviceName *string
@@ -321,6 +321,30 @@ func (o *instantiateOptions) isProductionEnvironment() bool {
 // withing the logging registry with a tracer that can be be used for conditionally tracing
 // code.
 //
+// The logger actual logger instance will be created when `InstantiateLoggers` is called
+// somewhere in the main entry point of your application.
+//
+// The `shortName` is usually the project name (e.g., "myapp") and the `packageID` is
+// usually the full package path (e.g., "github.com/myorg/myapp/mypackage").
+//
+// Example:
+//
+//		var zlog, tracer = logging.PackageLogger("myapp", "github.com/myorg/myapp/mypackage")
+//
+//		func main() {
+//			logging.InstantiateLoggers()
+//		    ...
+//		 }
+//
+//		func MyFunction() {
+//		 	if tracer.Enabled() {
+//				// Use debug since zap doesn't have trace level
+//				zlog.Debug(...)
+//			}
+//
+//			zlog.Info("some logging", zap.String("key", "value"))
+//	  }
+//
 // You should used this in packages that are not `main` packages
 func PackageLogger(shortName string, packageID string, registerOptions ...LoggerOption) (*zap.Logger, Tracer) {
 	return packageLogger(globalRegistry, shortName, packageID, registerOptions...)
@@ -481,11 +505,11 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 				if options.logLevelSwitcherServerAutoResetTimeout != nil {
 					timeout = *options.logLevelSwitcherServerAutoResetTimeout
 				}
-				
+
 				patternTracker = newPatternTracker(registry, timeout, dbgZlog.Named("pattern_tracker"))
 				patternTracker.start()
-				
-				dbgZlog.Info("started pattern tracker for auto-reset functionality", 
+
+				dbgZlog.Info("started pattern tracker for auto-reset functionality",
 					zap.Duration("timeout", timeout))
 			}
 
@@ -493,11 +517,11 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 				registry:       registry,
 				patternTracker: patternTracker,
 			}
-			
+
 			if err := http.ListenAndServe(listenAddr, handler); err != nil {
 				dbgZlog.Warn("failed starting atomic level switcher", zap.Error(err), zap.String("listen_addr", listenAddr))
 			}
-			
+
 			// Clean shutdown of pattern tracker
 			if patternTracker != nil {
 				patternTracker.stop()
@@ -608,6 +632,7 @@ type boolTracer struct {
 	value *bool
 }
 
+//go:inline
 func (t boolTracer) Enabled() bool {
 	if t.value == nil {
 		return false
