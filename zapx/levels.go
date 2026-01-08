@@ -7,8 +7,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var zlog, tracing = logging.PackageLogger("name", "component")
-
 // Trace logs a trace-level message optional fields.
 //
 // Example:
@@ -26,7 +24,7 @@ var zlog, tracing = logging.PackageLogger("name", "component")
 // and inlining should remove any overhead.
 //
 //go:inline
-func Trace(logger zap.Logger, tracer logging.Tracer, msg string, fields ...zap.Field) {
+func Trace(logger *zap.Logger, tracer logging.Tracer, msg string, fields ...zap.Field) {
 	if tracer.Enabled() {
 		logger.Debug(msg, fields...)
 	}
@@ -52,7 +50,7 @@ func Trace(logger zap.Logger, tracer logging.Tracer, msg string, fields ...zap.F
 // formatting is done eagerly.
 //
 //go:inline
-func Tracef(logger zap.Logger, tracer logging.Tracer, msg string, args []any, fields ...zap.Field) {
+func Tracef(logger *zap.Logger, tracer logging.Tracer, msg string, args []any, fields ...zap.Field) {
 	if tracer.Enabled() {
 		logger.Debug(fmt.Sprintf(msg, args...), fields...)
 	}
@@ -68,7 +66,7 @@ func Tracef(logger zap.Logger, tracer logging.Tracer, msg string, args []any, fi
 // formatting is done eagerly.
 //
 //go:inline
-func Debugf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
+func Debugf(logger *zap.Logger, msg string, args []any, fields ...zap.Field) {
 	logger.Debug(fmt.Sprintf(msg, args...), fields...)
 }
 
@@ -82,7 +80,7 @@ func Debugf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
 // formatting is done eagerly.
 //
 //go:inline
-func Infof(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
+func Infof(logger *zap.Logger, msg string, args []any, fields ...zap.Field) {
 	logger.Info(fmt.Sprintf(msg, args...), fields...)
 }
 
@@ -110,7 +108,7 @@ func Warnf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
 // formatting is done eagerly.
 //
 //go:inline
-func Errorf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
+func Errorf(logger *zap.Logger, msg string, args []any, fields ...zap.Field) {
 	logger.Error(fmt.Sprintf(msg, args...), fields...)
 }
 
@@ -121,7 +119,7 @@ func Errorf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
 //	zapx.DPanicf(zlog, "User %s logged in from %s", []any{userName, ipAddress}, zap.String("user_id", userID))
 //
 //go:inline
-func DPanicf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
+func DPanicf(logger *zap.Logger, msg string, args []any, fields ...zap.Field) {
 	logger.DPanic(fmt.Sprintf(msg, args...), fields...)
 }
 
@@ -132,6 +130,6 @@ func DPanicf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
 //	zapx.Panicf(zlog, "User %s logged in from %s", []any{userName, ipAddress}, zap.String("user_id", userID))
 //
 //go:inline
-func Panicf(logger zap.Logger, msg string, args []any, fields ...zap.Field) {
+func Panicf(logger *zap.Logger, msg string, args []any, fields ...zap.Field) {
 	logger.Panic(fmt.Sprintf(msg, args...), fields...)
 }
