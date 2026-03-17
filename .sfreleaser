@@ -1,0 +1,4 @@
+global:
+  binary: logging
+  language: golang
+  variant: library
