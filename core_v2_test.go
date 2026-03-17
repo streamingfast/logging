@@ -369,6 +369,50 @@ func testingOptions(t *testingCore) InstantiateOption {
 	}))
 }
 
+// TestPackageLogger_LateRegistration_* prove the bug where a logger registered after
+// InstantiateLoggers was called is never instantiated and stays a no-op.
+
+func TestPackageLogger_LateRegistration_IsInstantiated(t *testing.T) {
+	registry := newRegistry("test", dbgZlog)
+	instantiateLoggers(registry, noEnv, newInstantiateOptions())
+
+	logger, tracer := registry.Register("late", "com/test/late")
+
+	// Without the fix, logger is still a no-op (all levels disabled).
+	// With the fix, it is properly instantiated at ErrorLevel (the entry default when no
+	// root logger or defaultLevel is configured).
+	assertLevelAndTraceEnabled(t, logger, zap.ErrorLevel, tracer, traceShouldBeDisabled)
+}
+
+func TestPackageLogger_LateRegistration_HonorsDefaultLevel(t *testing.T) {
+	registry := newRegistry("test", dbgZlog)
+	instantiateLoggers(registry, noEnv, newInstantiateOptions(WithDefaultLevel(zap.WarnLevel)))
+
+	logger, tracer := registry.Register("late", "com/test/late")
+
+	assertLevelAndTraceEnabled(t, logger, zap.WarnLevel, tracer, traceShouldBeDisabled)
+}
+
+func TestPackageLogger_LateRegistration_HonorsEnvSpec(t *testing.T) {
+	env := fakeEnv(map[string]string{"DEBUG": "late"})
+	registry := newRegistry("test", dbgZlog)
+	instantiateLoggers(registry, env, newInstantiateOptions())
+
+	logger, tracer := registry.Register("late", "com/test/late")
+
+	assertLevelAndTraceEnabled(t, logger, zap.DebugLevel, tracer, traceShouldBeDisabled)
+}
+
+func TestPackageLogger_LateRegistration_HonorsTraceEnvSpec(t *testing.T) {
+	env := fakeEnv(map[string]string{"TRACE": "late"})
+	registry := newRegistry("test", dbgZlog)
+	instantiateLoggers(registry, env, newInstantiateOptions())
+
+	logger, tracer := registry.Register("late", "com/test/late")
+
+	assertLevelAndTraceEnabled(t, logger, zap.DebugLevel, tracer, traceShouldBeEnabled)
+}
+
 func TestGlobalRegistry(t *testing.T) {
 	r := GlobalRegistry()
 	require.NotNil(t, r)

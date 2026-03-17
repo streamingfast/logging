@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 * `GlobalRegistry() Registry` exposes the global registry, allowing a future v2 module to discover and re-instantiate all loggers registered via v1 `PackageLogger`.
 * `Registry.All(fn func(packageID, shortName string))` iterates over all registered loggers in a registry, enabling cross-module migration scenarios.
+* Loggers registered via `PackageLogger` after `InstantiateLoggers` has already been called are now immediately instantiated and have the same level rules (default level, pre-spec, env spec) applied to them.
 
 ### Changed
 

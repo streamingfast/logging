@@ -547,6 +547,28 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 		}()
 	}
 
+	// Any PackageLogger registered after InstantiateLoggers was called should be
+	// immediately instantiated and have the same level rules applied to it.
+	capturedEnvSpec := logLevelSpec
+	capturedRootAffected := rootLoggerAffectedByUser
+	registry.onNewEntry = func(entry *registryEntry) {
+		registry.createLoggerForEntry(entry)
+
+		if options.defaultLevel != nil {
+			registry.setLevelForEntry(entry, *options.defaultLevel, false)
+		}
+
+		if options.preSpec != nil {
+			registry.applyLevelSpecToEntry(entry, options.preSpec)
+		}
+
+		registry.applyLevelSpecToEntry(entry, capturedEnvSpec)
+
+		if registry.rootEntry != nil && !capturedRootAffected && entry.shortName == registry.rootEntry.shortName {
+			registry.setLevelForEntry(entry, zapcore.InfoLevel, false)
+		}
+	}
+
 	if registry.dbgLogger.Core().Enabled(zapcore.InfoLevel) {
 		registry.dumpRegistryToLogger()
 	}

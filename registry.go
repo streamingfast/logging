@@ -198,6 +198,10 @@ func register(registry *registry, packageID string, zlogPtr *zap.Logger, options
 
 	// The tracing has already been set, so we can go unspecified here to not change anything
 	setLogger(entry, zlogPtr, unspecifiedTracing)
+
+	if registry.onNewEntry != nil {
+		registry.onNewEntry(entry)
+	}
 }
 
 // Deprecated: Do not use, setting a new logger completely is not supported anymore. Use [SetLevelFor] instead.
@@ -353,7 +357,8 @@ type registry struct {
 	entriesByPackageID map[string]*registryEntry
 	entriesByShortName map[string][]*registryEntry
 
-	rootEntry *registryEntry
+	rootEntry  *registryEntry
+	onNewEntry func(entry *registryEntry)
 
 	dbgLogger *zap.Logger
 }
@@ -468,6 +473,45 @@ func (r *registry) forAllEntries(callback func(entry *registryEntry)) {
 	for _, entry := range r.entriesByPackageID {
 		callback(entry)
 	}
+}
+
+// applyLevelSpecToEntry applies all matching specs from spec to a single entry,
+// preserving the same priority rules as forAllEntriesMatchingSpec.
+func (r *registry) applyLevelSpecToEntry(entry *registryEntry, spec *logLevelSpec) {
+	for _, specForKey := range spec.sortedSpecs() {
+		if specForKey.key == "true" || specForKey.key == "*" {
+			r.setLevelForEntry(entry, specForKey.level, specForKey.trace)
+			continue
+		}
+
+		if r.entryMatchesSpec(entry, specForKey) {
+			r.setLevelForEntry(entry, specForKey.level, specForKey.trace)
+		}
+	}
+}
+
+// entryMatchesSpec reports whether entry is matched by spec, using the same
+// priority as forEntriesMatchingSpec: shortName exact match, then packageID
+// exact match, then regex against packageID.
+func (r *registry) entryMatchesSpec(entry *registryEntry, spec *levelSpec) bool {
+	if entries, found := r.entriesByShortName[spec.key]; found {
+		for _, e := range entries {
+			if e == entry {
+				return true
+			}
+		}
+		return false
+	}
+
+	if e, found := r.entriesByPackageID[spec.key]; found {
+		return e == entry
+	}
+
+	regex, err := regexp.Compile(spec.key)
+	if err != nil {
+		return false
+	}
+	return regex.MatchString(entry.packageID)
 }
 
 // forAllEntriesMatchingSpec iterate sequentially through the sorted spec
