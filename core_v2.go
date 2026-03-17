@@ -317,6 +317,14 @@ func (o *instantiateOptions) isProductionEnvironment() bool {
 	return false
 }
 
+// GlobalRegistry returns the global registry where all [PackageLogger] calls register to.
+//
+// This is primarily intended for cross-module migration scenarios, such as allowing a v2
+// module to discover and re-instantiate loggers registered via the v1 [PackageLogger].
+func GlobalRegistry() Registry {
+	return globalRegistry
+}
+
 // PackageLogger creates a new no-op logger (via `zap.NewNop`) and automatically registered it
 // withing the logging registry with a tracer that can be be used for conditionally tracing
 // code.
@@ -385,6 +393,11 @@ func InstantiateLoggers(opts ...InstantiateOption) {
 // creating scripts to both create the root logger and instantiate all loggers.
 //
 // If you require configuring some details of the root logger, make the two calls manually.
+//
+// Deprecated: This was done with the intent that the "root" logger would be info by default and all
+// others wouldn't. Trying to be smart just causes confusion at the API level. Always use [PackageLogger]
+// and then call [InstantiateLoggers] and use [WithDefaultSpec] to control finely what you want in term of
+// spec like `WithDefaultSpec("logger1=info,logger2=debug,.*=warn")` (regex supported).
 func ApplicationLogger(shortName string, packageID string, opts ...InstantiateOption) (*zap.Logger, Tracer) {
 	return applicationLogger(globalRegistry, os.Getenv, shortName, packageID, opts...)
 }
@@ -409,6 +422,11 @@ func applicationLogger(registry *registry, envGet func(string) string, shortName
 //
 //  2. Otherwise
 //     Use a developer friendly colored format
+//
+// Deprecated: This was done with the intent that the "root" logger would be info by default and all
+// others wouldn't. Trying to be smart just causes confusion at the API level. Always use [PackageLogger]
+// and when calling [InstantiateLoggers], use [WithDefaultSpec] to control finely what you want in term of
+// spec like `WithDefaultSpec("logger1=info,logger2=debug,.*=warn")` (regex supported).
 func RootLogger(shortName string, packageID string, opts ...LoggerOption) (*zap.Logger, Tracer) {
 	return rootLogger(globalRegistry, shortName, packageID, opts...)
 }
@@ -529,7 +547,9 @@ func instantiateLoggers(registry *registry, envGet func(string) string, options 
 		}()
 	}
 
-	registry.dumpRegistryToLogger()
+	if registry.dbgLogger.Core().Enabled(zapcore.InfoLevel) {
+		registry.dumpRegistryToLogger()
+	}
 }
 
 func newLogger(dbgLogger *zap.Logger, name string, level zap.AtomicLevel, opts *instantiateOptions) *zap.Logger {

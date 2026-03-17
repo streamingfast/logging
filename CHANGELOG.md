@@ -3,7 +3,12 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Next
+## v1.2.0
+
+### Added
+
+* `GlobalRegistry() Registry` exposes the global registry, allowing a future v2 module to discover and re-instantiate all loggers registered via v1 `PackageLogger`.
+* `Registry.All(fn func(packageID, shortName string))` iterates over all registered loggers in a registry, enabling cross-module migration scenarios.
 
 ### Changed
 
@@ -14,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * **Deprecated** `logging.Register`, use `var zlog, _ = logging.PackageLogger(<shortName>, "...")` instead.
 * **Deprecated** `logging.RegisterOnUpdate`, use `logging.LoggerOnUpdate` instead (will probably be removed actually entirely since it's not needed anymore).
 * **Deprecated** `logging.WithServiceName`, no replacement yet (will be `logging.LoggerServiceName` in a future release, if unspecified `shortName` will be used).
+* **Deprecated** `logging.RootLogger`, use `logging.PackageLogger` and control levels via `logging.WithDefaultSpec(...)` in `InstantiateLoggers` instead (e.g. `WithDefaultSpec("logger1=info,logger2=debug,.*=warn")`). The root logger concept tried to be smart about defaulting to `info` which caused API confusion.
 
 ### Removed
 

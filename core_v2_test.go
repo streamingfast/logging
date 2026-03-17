@@ -368,3 +368,52 @@ func testingOptions(t *testingCore) InstantiateOption {
 		return t
 	}))
 }
+
+func TestGlobalRegistry(t *testing.T) {
+	r := GlobalRegistry()
+	require.NotNil(t, r)
+	assert.Same(t, globalRegistry, r.(*registry))
+}
+
+func TestRegistry_All_Empty(t *testing.T) {
+	r := newRegistry("test", dbgZlog)
+
+	var got []string
+	r.All(func(packageID, shortName string) {
+		got = append(got, packageID)
+	})
+
+	assert.Empty(t, got)
+}
+
+func TestRegistry_All_SingleEntry(t *testing.T) {
+	r := newRegistry("test", dbgZlog)
+	r.Register("myapp", "com/org/myapp")
+
+	type entry struct{ packageID, shortName string }
+	var got []entry
+	r.All(func(packageID, shortName string) {
+		got = append(got, entry{packageID, shortName})
+	})
+
+	require.Len(t, got, 1)
+	assert.Equal(t, "com/org/myapp", got[0].packageID)
+	assert.Equal(t, "myapp", got[0].shortName)
+}
+
+func TestRegistry_All_MultipleEntries(t *testing.T) {
+	r := newRegistry("test", dbgZlog)
+	r.Register("app", "com/org/app")
+	r.Register("lib", "com/org/lib")
+	r.Register("", "com/org/anon")
+
+	seen := map[string]string{}
+	r.All(func(packageID, shortName string) {
+		seen[packageID] = shortName
+	})
+
+	require.Len(t, seen, 3)
+	assert.Equal(t, "app", seen["com/org/app"])
+	assert.Equal(t, "lib", seen["com/org/lib"])
+	assert.Equal(t, "", seen["com/org/anon"])
+}

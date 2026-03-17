@@ -196,13 +196,8 @@ func register(registry *registry, packageID string, zlogPtr *zap.Logger, options
 
 	registry.registerEntry(entry)
 
-	logger := defaultLogger
-	if zlogPtr != nil {
-		logger = zlogPtr
-	}
-
 	// The tracing has already been set, so we can go unspecified here to not change anything
-	setLogger(entry, logger, unspecifiedTracing)
+	setLogger(entry, zlogPtr, unspecifiedTracing)
 }
 
 // Deprecated: Do not use, setting a new logger completely is not supported anymore. Use [SetLevelFor] instead.
@@ -346,6 +341,10 @@ type Registry interface {
 	Register(shortName string, packageID string, options ...LoggerOption) (*zap.Logger, Tracer)
 	SetLevel(filterString string, level zapcore.Level, tracer bool)
 	GetLoggerByPackageID(packageID string) (*zap.Logger, Tracer, bool)
+
+	// All calls fn for every registered logger in the registry.
+	// The order of iteration is not guaranteed.
+	All(fn func(packageID, shortName string))
 }
 
 type registry struct {
@@ -457,6 +456,12 @@ func (r *registry) registerEntry(entry *registryEntry) {
 	}
 
 	r.dbgLogger.Info("registered entry", zap.String("short_name", shortName), zap.String("id", id))
+}
+
+func (r *registry) All(fn func(packageID, shortName string)) {
+	for _, entry := range r.entriesByPackageID {
+		fn(entry.packageID, entry.shortName)
+	}
 }
 
 func (r *registry) forAllEntries(callback func(entry *registryEntry)) {
