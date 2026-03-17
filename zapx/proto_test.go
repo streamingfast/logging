@@ -99,7 +99,14 @@ func TestProtoStringer_String(t *testing.T) {
 				return
 			}
 
-			require.Equal(t, tt.want, result)
+			require.Equal(t, normalizedSpaces(tt.want), normalizedSpaces(result))
 		})
 	}
+}
+
+// normalizedSpaces collapses consecutive whitespace characters into a single space and trims leading/trailing whitespace.
+// this is needed as ProtoText and ProtoJSON have built-in feature to change from invocation to invocation
+// the amount of spaces and newlines in the output.
+func normalizedSpaces(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
