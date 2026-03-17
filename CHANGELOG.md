@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `Registry.All(fn func(packageID, shortName string))` iterates over all registered loggers in a registry, enabling cross-module migration scenarios.
 * Loggers registered via `PackageLogger` after `InstantiateLoggers` has already been called are now immediately instantiated and have the same level rules (default level, pre-spec, env spec) applied to them.
 
+### Fixed
+
+* `SetLevelFor` now re-applies the current environment variable overrides (DLOG, DEBUG, TRACE, …) after setting the level, so the provided level acts as a baseline that env vars can override. This fixes the common pattern of calling `SetLevelFor(".*", zap.WarnLevel, false)` in a Cobra `PreRun` hook while still allowing `DLOG`/`DEBUG`/`TRACE` to take effect.
+
 ### Changed
 
 * The default text `encoder` use to encode log entries now emits the level when coloring is disabled.

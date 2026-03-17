@@ -220,14 +220,30 @@ func Set(logger *zap.Logger, regexps ...string) {
 	}
 }
 
-// SetLevelFor sets the level of the logger for all registered loggers in the registry
-// that match the given `input` (which can be a package ID or a short name) and where
-// input accept a regular expression.
+// SetLevelFor sets the level of all registered loggers matching `input` (package ID,
+// short name, or regular expression), then re-applies the current environment variable
+// overrides (DLOG, DEBUG, TRACE, …) so they remain in effect.
 //
-// For all matching loggers, their level will be changed to the specified level
-// and with tracing enabled or not.
+// This means the provided level acts as a baseline: any logger whose short name or
+// package ID is matched by an active environment variable will keep the env-specified
+// level rather than the one passed here. This is the correct behaviour for use-cases
+// such as a Cobra PreRun hook that sets a default log level for a command:
+//
+//	func preRunSetLevelToWarn(cmd *cobra.Command, _ []string) error {
+//	    logging.SetLevelFor(".*", zap.WarnLevel, false)
+//	    return nil
+//	}
 func SetLevelFor(input string, level zapcore.Level, tracer bool) {
-	globalRegistry.SetLevel(input, level, tracer)
+	setLevelFor(globalRegistry, os.Getenv, input, level, tracer)
+}
+
+func setLevelFor(r *registry, envGet func(string) string, input string, level zapcore.Level, tracer bool) {
+	r.SetLevel(input, level, tracer)
+
+	spec := newLogLevelSpec(envGet)
+	r.forAllEntriesMatchingSpec(spec, func(entry *registryEntry, l zapcore.Level, t bool) {
+		r.setLevelForEntry(entry, l, t)
+	})
 }
 
 // Extend is different than `Set` by being able to re-configure the existing logger set for

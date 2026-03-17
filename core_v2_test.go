@@ -369,6 +369,45 @@ func testingOptions(t *testingCore) InstantiateOption {
 	}))
 }
 
+// TestSetLevelFor_* cover the behaviour where a pre-run hook sets a baseline level
+// but env-var overrides (DLOG, DEBUG, TRACE, …) must still take precedence.
+
+func TestSetLevelFor_SetsLevelWhenNoEnv(t *testing.T) {
+	registry := newRegistry("test", dbgZlog)
+	logger, tracer := registry.Register("app", "com/test/app")
+	instantiateLoggers(registry, noEnv, newInstantiateOptions())
+
+	setLevelFor(registry, noEnv, ".*", zap.WarnLevel, false)
+
+	assertLevelAndTraceEnabled(t, logger, zap.WarnLevel, tracer, traceShouldBeDisabled)
+}
+
+func TestSetLevelFor_EnvSpecTakesPrecedence(t *testing.T) {
+	env := fakeEnv(map[string]string{"DEBUG": "app"})
+	registry := newRegistry("test", dbgZlog)
+	appLogger, appTracer := registry.Register("app", "com/test/app")
+	libLogger, libTracer := registry.Register("lib", "com/test/lib")
+	instantiateLoggers(registry, env, newInstantiateOptions())
+
+	setLevelFor(registry, env, ".*", zap.WarnLevel, false)
+
+	// app was matched by DEBUG env, so it stays at Debug despite the Warn baseline
+	assertLevelAndTraceEnabled(t, appLogger, zap.DebugLevel, appTracer, traceShouldBeDisabled)
+	// lib was not matched by env, so it gets the Warn baseline
+	assertLevelAndTraceEnabled(t, libLogger, zap.WarnLevel, libTracer, traceShouldBeDisabled)
+}
+
+func TestSetLevelFor_TraceEnvSpecTakesPrecedence(t *testing.T) {
+	env := fakeEnv(map[string]string{"TRACE": "app"})
+	registry := newRegistry("test", dbgZlog)
+	logger, tracer := registry.Register("app", "com/test/app")
+	instantiateLoggers(registry, env, newInstantiateOptions())
+
+	setLevelFor(registry, env, ".*", zap.WarnLevel, false)
+
+	assertLevelAndTraceEnabled(t, logger, zap.DebugLevel, tracer, traceShouldBeEnabled)
+}
+
 // TestPackageLogger_LateRegistration_* prove the bug where a logger registered after
 // InstantiateLoggers was called is never instantiated and stays a no-op.
 
