@@ -362,6 +362,13 @@ type Registry interface {
 	SetLevel(filterString string, level zapcore.Level, tracer bool)
 	GetLoggerByPackageID(packageID string) (*zap.Logger, Tracer, bool)
 
+	// GetTracerByPackageID returns the raw *bool pointer backing the Tracer
+	// registered under packageID. The pointer can be written to directly to
+	// mirror trace-enabled state from an external source (e.g. a v2 bridge).
+	// Returns (nil, false) if no entry with that packageID is found or if the
+	// entry has no tracer.
+	GetTracerByPackageID(packageID string) (*bool, bool)
+
 	// All calls fn for every registered logger in the registry.
 	// The order of iteration is not guaranteed.
 	All(fn func(packageID, shortName string))
@@ -440,6 +447,13 @@ func (r *registry) GetLoggerByPackageID(packageID string) (*zap.Logger, Tracer, 
 		return v.logPtr, &boolTracer{v.traceEnabled}, true
 	}
 	return nil, nil, false
+}
+
+func (r *registry) GetTracerByPackageID(packageID string) (*bool, bool) {
+	if v, ok := r.entriesByPackageID[packageID]; ok && v.traceEnabled != nil {
+		return v.traceEnabled, true
+	}
+	return nil, false
 }
 
 func (r *registry) registerEntry(entry *registryEntry) {

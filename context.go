@@ -26,15 +26,19 @@ type loggerKeyType int
 const loggerKey loggerKeyType = iota
 
 // WithLogger is used to create a new context with a logger added to it
-// so it can be later retrieved using `Logger`.
+// so it can be later retrieved using [LoggerFromContext].
 func WithLogger(ctx context.Context, logger *zap.Logger) context.Context {
 	return context.WithValue(ctx, loggerKey, logger)
 }
 
-// Logger is used to retrieved the logger from the context. If no logger
-// is present in the context, the `fallbackLogger` received in parameter
-// is returned instead.
-func Logger(ctx context.Context, fallbackLogger *zap.Logger) *zap.Logger {
+// LoggerFromContext retrieves the logger stored in the context by [WithLogger].
+// If no logger is present or ctx is nil, fallbackLogger is returned instead.
+//
+// For one-off log calls, prefer the level-specific helpers which avoid the
+// intermediate variable:
+//
+//	logging.Info(ctx, zlog, "user created", zap.String("id", id))
+func LoggerFromContext(ctx context.Context, fallbackLogger *zap.Logger) *zap.Logger {
 	if ctx == nil {
 		return fallbackLogger
 	}
@@ -46,26 +50,37 @@ func Logger(ctx context.Context, fallbackLogger *zap.Logger) *zap.Logger {
 	return fallbackLogger
 }
 
-// Debug is a shortcut for `Logger(ctx, zlog).Debug("some message", ...some fields)`
+// Logger retrieves the logger stored in the context by [WithLogger].
+//
+// Deprecated: Use [LoggerFromContext] instead. For one-off log calls at a
+// known level you can also use the level helpers directly:
+//
+//	logging.Info(ctx, zlog, "msg", fields...)
+//	logging.Debug(ctx, zlog, "msg", fields...)
+func Logger(ctx context.Context, fallbackLogger *zap.Logger) *zap.Logger {
+	return LoggerFromContext(ctx, fallbackLogger)
+}
+
+// Debug is a one-line shortcut for [LoggerFromContext](ctx, zlog).Debug(...)
 func Debug(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
 	log(ctx, fallbackLogger, zapcore.DebugLevel, msg, fields)
 }
 
-// Info is a shortcut for `Logger(ctx, zlog).Info("some message", ...some fields)`
+// Info is a one-line shortcut for [LoggerFromContext](ctx, zlog).Info(...)
 func Info(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
 	log(ctx, fallbackLogger, zapcore.InfoLevel, msg, fields)
 }
 
-// Warn is a shortcut for `Logger(ctx, zlog).Warn("some message", ...some fields)`
+// Warn is a one-line shortcut for [LoggerFromContext](ctx, zlog).Warn(...)
 func Warn(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
 	log(ctx, fallbackLogger, zapcore.WarnLevel, msg, fields)
 }
 
-// Error is a shortcut for `Logger(ctx, zlog).Error("some message", ...some fields)`
+// Error is a one-line shortcut for [LoggerFromContext](ctx, zlog).Error(...)
 func Error(ctx context.Context, fallbackLogger *zap.Logger, msg string, fields ...zapcore.Field) {
 	log(ctx, fallbackLogger, zapcore.ErrorLevel, msg, fields)
 }
 
 func log(ctx context.Context, fallbackLogger *zap.Logger, level zapcore.Level, msg string, fields []zapcore.Field) {
-	Logger(ctx, fallbackLogger).Check(level, msg).Write(fields...)
+	LoggerFromContext(ctx, fallbackLogger).Check(level, msg).Write(fields...)
 }

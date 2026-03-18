@@ -3,6 +3,17 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+* `Registry.GetTracerByPackageID(packageID string) (*bool, bool)` exposes the raw trace-enabled pointer for a registered logger, allowing external bridges (e.g. a v2 compatibility layer) to mirror trace state into v1 tracers.
+* `logging.LoggerFromContext(ctx, fallback)` as the canonical replacement for `logging.Logger(ctx, fallback)`.
+
+### Deprecated
+
+* `logging.Logger(ctx, fallback)` — use `logging.LoggerFromContext` instead, or the one-liner level helpers `logging.Info`, `logging.Debug`, etc.
+
 ## v1.2.1
 
 ### Added
