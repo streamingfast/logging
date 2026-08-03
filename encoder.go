@@ -281,10 +281,6 @@ var _jsonPool = sync.Pool{New: func() interface{} {
 	return &jsonEncoder{}
 }}
 
-func getJSONEncoder() *jsonEncoder {
-	return _jsonPool.Get().(*jsonEncoder)
-}
-
 func putJSONEncoder(enc *jsonEncoder) {
 	if enc.reflectBuf != nil {
 		enc.reflectBuf.Free()
@@ -546,7 +542,7 @@ func (enc *jsonEncoder) Clone() zapcore.Encoder {
 }
 
 func (enc *jsonEncoder) clone() *jsonEncoder {
-	clone := getJSONEncoder()
+	clone := &jsonEncoder{}
 	clone.EncoderConfig = enc.EncoderConfig
 	clone.spaced = enc.spaced
 	clone.openNamespaces = enc.openNamespaces
