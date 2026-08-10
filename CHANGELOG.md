@@ -3,6 +3,16 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Fixed
+
+* Fixed the reflection buffer used by `zap.Any`/`zap.Reflect` fields never being returned to the buffer pool by the developer-friendly `Encoder`, which made every such log line allocate a fresh 1 KiB buffer (measured 1451 B/op down to 392 B/op, 13 allocs down to 11).
+
+### Removed
+
+* Removed the unused `_jsonPool`/`_loggerPool` encoder pools. Nothing ever returned an encoder to them, so they only ever allocated; `jsonEncoder.clone` now allocates directly, which also removes a shared mutable state hazard. No API change.
+
 ## v1.2.2
 
 ### Added

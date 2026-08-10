@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -696,14 +695,6 @@ func ptrBoolToString(value *bool) string {
 	default:
 		return "false"
 	}
-}
-
-func ptrIntToString(value *int) string {
-	if value == nil {
-		return "<nil>"
-	}
-
-	return strconv.FormatInt(int64(*value), 10)
 }
 
 func ptrStringToString(value *string) string {
