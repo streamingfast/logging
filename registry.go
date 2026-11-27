@@ -19,6 +19,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 
 	"go.uber.org/zap"
@@ -317,7 +318,7 @@ func TestingOverride() {
 	if regex == "" {
 		Override(logger)
 	} else {
-		for _, regexPart := range strings.Split(regex, ",") {
+		for regexPart := range strings.SplitSeq(regex, ",") {
 			regexPart = strings.TrimSpace(regexPart)
 			if regexPart != "" {
 				Set(logger, regexPart)
@@ -525,12 +526,7 @@ func (r *registry) applyLevelSpecToEntry(entry *registryEntry, spec *logLevelSpe
 // exact match, then regex against packageID.
 func (r *registry) entryMatchesSpec(entry *registryEntry, spec *levelSpec) bool {
 	if entries, found := r.entriesByShortName[spec.key]; found {
-		for _, e := range entries {
-			if e == entry {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(entries, entry)
 	}
 
 	if e, found := r.entriesByPackageID[spec.key]; found {

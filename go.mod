@@ -1,6 +1,6 @@
 module github.com/streamingfast/logging
 
-go 1.22
+go 1.26
 
 require (
 	github.com/blendle/zapdriver v1.3.1
@@ -15,7 +15,6 @@ require (
 require github.com/benbjohnson/clock v1.1.0 // indirect
 
 require (
-	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/lithammer/dedent v1.1.0
 	github.com/pmezard/go-difflib v1.0.0 // indirect

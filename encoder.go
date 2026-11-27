@@ -158,7 +158,7 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 		if loggerName == "" {
 			if ent.Caller.Defined {
 				base := path.Base(ent.Caller.FullPath())
-				packagePath := strings.Split(base, ".")[0]
+				packagePath, _, _ := strings.Cut(base, ".")
 				if packagePath != "" {
 					loggerName = packagePath
 				}
@@ -223,8 +223,8 @@ func (c Encoder) EncodeEntry(ent zapcore.Entry, fields []zapcore.Field) (*buffer
 }
 
 func maybeRemovePackageVersion(input string) string {
-	atIndex := strings.Index(input, "@")
-	if atIndex == -1 {
+	before, _, ok := strings.Cut(input, "@")
+	if !ok {
 		return input
 	}
 
@@ -233,7 +233,7 @@ func maybeRemovePackageVersion(input string) string {
 		return input
 	}
 
-	return input[0:atIndex] + input[cutUpToIndex:]
+	return before + input[cutUpToIndex:]
 }
 
 func (c Encoder) writeJSONFields(line *buffer.Buffer, extra []zapcore.Field) {
@@ -354,7 +354,7 @@ var nullLiteralBytes = []byte("null")
 
 // Only invoke the standard JSON encoder if there is actually something to
 // encode; otherwise write JSON null literal directly.
-func (enc *jsonEncoder) encodeReflected(obj interface{}) ([]byte, error) {
+func (enc *jsonEncoder) encodeReflected(obj any) ([]byte, error) {
 	if obj == nil {
 		return nullLiteralBytes, nil
 	}
@@ -366,7 +366,7 @@ func (enc *jsonEncoder) encodeReflected(obj interface{}) ([]byte, error) {
 	return enc.reflectBuf.Bytes(), nil
 }
 
-func (enc *jsonEncoder) AddReflected(key string, obj interface{}) error {
+func (enc *jsonEncoder) AddReflected(key string, obj any) error {
 	valueBytes, err := enc.encodeReflected(obj)
 	if err != nil {
 		return err
@@ -454,7 +454,7 @@ func (enc *jsonEncoder) AppendInt64(val int64) {
 	enc.buf.AppendInt(val)
 }
 
-func (enc *jsonEncoder) AppendReflected(val interface{}) error {
+func (enc *jsonEncoder) AppendReflected(val any) error {
 	valueBytes, err := enc.encodeReflected(val)
 	if err != nil {
 		return err

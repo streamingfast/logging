@@ -123,7 +123,8 @@ curl http://localhost:1065/ -XPUT -d '{"level": "info", "inputs": "github.com/my
 
 We provide the package `zapx` as a way to add some helpers that are called mostly similar as regular zap named field like `zap.String(<name>, <value>)` to make some recurring use cases easier to implement globally.
 
-- `zapx.Secret(<name>, <value>)` print the string obfuscated using a 1/4 ratio for masking the input, see [test cases](./zapx/secrets_test.go) to "see" how it looks like.
+- `zapx.Secret(<name>, <value>)` print the string redacted as `***` plus its last 4 characters (`***WXYZ`), or only `***` when shorter than 12 characters, see [test cases](./zapx/secrets_test.go) to "see" how it looks like.
+- `zapx.SecretPrefixed(<name>, <value>)` same as `zapx.Secret` but keeps the type prefix of known-format API keys (`sk_live_***WXYZ`), never use it for passwords or passphrases.
 
 ## Contributing
 

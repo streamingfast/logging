@@ -5,6 +5,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+* `zapx.SecretPrefixed(name, value)` and `zapx.SecretPrefixedString` redact known-format API keys while keeping their type prefix visible (`sk_live_***WXYZ`). The prefix is up to 2 segments of 1 to 5 ASCII letters followed by `_` and is kept only when at least 12 characters remain after it. Never use them for passwords or passphrases.
+
+### Changed
+
+* Bumped the minimum Go version to 1.26.
+* `zapx.Secret` and `zapx.SecretString` no longer show 25% of the head and 10% of the tail of the secret, which exposed large parts of long keys (e.g. `sk_live_` plus the account id of a Stripe key). They now print `***` plus the last 4 characters, or only `***` when the secret is shorter than 12 characters. The mask has a fixed length so the secret length is no longer revealed.
+
 ### Fixed
 
 * Fixed the reflection buffer used by `zap.Any`/`zap.Reflect` fields never being returned to the buffer pool by the developer-friendly `Encoder`, which made every such log line allocate a fresh 1 KiB buffer (measured 1451 B/op down to 392 B/op, 13 allocs down to 11).

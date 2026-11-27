@@ -37,7 +37,7 @@ func IsTraceEnabled(shortName string, packageID string) bool {
 	}
 
 	isEnabled := false
-	for _, filter := range strings.Split(trace, ",") {
+	for filter := range strings.SplitSeq(trace, ",") {
 		if logFilter(filter).isAllowed(shortName, packageID) {
 			isEnabled = true
 			break
@@ -45,7 +45,7 @@ func IsTraceEnabled(shortName string, packageID string) bool {
 	}
 
 	// Now if it's denied, it should not be enabled
-	for _, filter := range strings.Split(trace, ",") {
+	for filter := range strings.SplitSeq(trace, ",") {
 		if logFilter(filter).isDenied(shortName, packageID) {
 			isEnabled = false
 			break
