@@ -113,14 +113,14 @@ func (f instantiateFuncOption) apply(o *instantiateOptions) {
 // Which in this example above, would change all
 func WithLogLevelSwitcherServerAutoStart() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelSwitcherServerAutoStart = ptrBool(true)
+		o.logLevelSwitcherServerAutoStart = new(true)
 	})
 }
 
 // Deprecated: Use `WithLogLevelSwitcherServerAutoStart` instead
 func WithSwitcherServerAutoStart() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelSwitcherServerAutoStart = ptrBool(true)
+		o.logLevelSwitcherServerAutoStart = new(true)
 	})
 }
 
@@ -152,7 +152,7 @@ func WithSwitcherServerListeningAddress(addr string) InstantiateOption {
 // This can be overridden on a per-request basis using the "permanent" field in the HTTP request.
 func WithLogLevelSwitcherServerAutoResetEnabled() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelSwitcherServerAutoResetEnabled = ptrBool(true)
+		o.logLevelSwitcherServerAutoResetEnabled = new(true)
 	})
 }
 
@@ -160,7 +160,7 @@ func WithLogLevelSwitcherServerAutoResetEnabled() InstantiateOption {
 // This is useful in development environments where you want debug/trace levels to persist.
 func WithLogLevelSwitcherServerAutoResetDisabled() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.logLevelSwitcherServerAutoResetEnabled = ptrBool(false)
+		o.logLevelSwitcherServerAutoResetEnabled = new(false)
 	})
 }
 
@@ -176,7 +176,7 @@ func WithLogLevelSwitcherServerAutoResetTimeout(timeout time.Duration) Instantia
 
 func WithReportAllErrors() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.reportAllErrors = ptrBool(true)
+		o.reportAllErrors = new(true)
 	})
 }
 
@@ -185,7 +185,7 @@ func WithReportAllErrors() InstantiateOption {
 // call `InstantiateLoggers`.
 func WithServiceName(name string) InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.serviceName = ptrString(name)
+		o.serviceName = new(name)
 	})
 }
 
@@ -217,7 +217,7 @@ func WithProductionDetector(productionLoggerDetector func() bool) InstantiateOpt
 // instantiated.
 func WithDefaultLevel(level zapcore.Level) InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.defaultLevel = ptrLevel(level)
+		o.defaultLevel = new(level)
 	})
 }
 
@@ -263,14 +263,14 @@ func WithOutputToFile(logFile string) InstantiateOption {
 // which is to log to `stderr`.
 func WithConsoleToStdout() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.consoleOutput = ptrString("stdout")
+		o.consoleOutput = new("stdout")
 	})
 }
 
 // WithConsoleToStderr configures the console to log to `stderr`, which is the default.
 func WithConsoleToStderr() InstantiateOption {
 	return instantiateFuncOption(func(o *instantiateOptions) {
-		o.consoleOutput = ptrString("stderr")
+		o.consoleOutput = new("stderr")
 	})
 }
 
@@ -681,10 +681,6 @@ func (t boolTracer) Enabled() bool {
 
 	return *t.value
 }
-
-func ptrBool(value bool) *bool                    { return &value }
-func ptrString(value string) *string              { return &value }
-func ptrLevel(value zapcore.Level) *zapcore.Level { return &value }
 
 func ptrBoolToString(value *bool) string {
 	switch {

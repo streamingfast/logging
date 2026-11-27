@@ -120,7 +120,7 @@ func (s *logLevelSpec) fillEnvFlat(level zapcore.Level, trace bool, key string, 
 // spec. The <key> can be any string as long as it does not contain "," and "="
 // while.
 func (s *logLevelSpec) fillFlat(level zapcore.Level, trace bool, input string) {
-	for _, key := range strings.Split(input, ",") {
+	for key := range strings.SplitSeq(input, ",") {
 		key = strings.TrimSpace(key)
 		if key != "" {
 			s.add(key, level, trace)
@@ -139,7 +139,7 @@ func (s *logLevelSpec) fillFlat(level zapcore.Level, trace bool, input string) {
 // while the <level> should be one of 'error', 'warn' (or 'warning'), 'info', 'debug'
 // or 'trace'.
 func (s *logLevelSpec) fillKeyValue(input string) {
-	for _, keyValue := range strings.Split(input, ",") {
+	for keyValue := range strings.SplitSeq(input, ",") {
 		keyValue = strings.TrimSpace(keyValue)
 		if keyValue == "" {
 			continue
